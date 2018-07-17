@@ -234,7 +234,7 @@ def setup(hass, config):
 
 def _updateStateData(domain_data, force_refresh=False):
 
-    _LOGGER.debug("_updateStateData() begins...")
+    _LOGGER.info("_updateStateData() begins...")
 
     client = domain_data['evohomeClient']
 
@@ -250,20 +250,20 @@ def _updateStateData(domain_data, force_refresh=False):
         try:  # re-authenticate
             client.locations = [] 
 
-            _LOGGER.debug("Calling v2 API [? request(s)]: client._login...")
+            _LOGGER.info("Calling v2 API [? request(s)]: client._login...")
             client._login()  # this invokes client.installation()
             
         except:
             _LOGGER.error("Re-connect to client (Honeywell web) API: failed!")
             raise
 
-        _LOGGER.debug("Refresh of client (Honeywell web) API: success")
+        _LOGGER.info("Refresh of client (Honeywell web) API: success")
 
         timeout = datetime.now()  # just done I/O
         domain_data['timers']['installExpires'] = timeout \
             + timedelta(seconds = domain_data['config'][REFRESH_INTERVAL])
 
-        _LOGGER.info("setup() Installation data expires: %s", timeout)
+        _LOGGER.info("update() Installation data expires: %s", timeout)
 
 
 ## 0. As a precaution, REDACT the data we don't need
@@ -281,12 +281,12 @@ def _updateStateData(domain_data, force_refresh=False):
     
     domain_data['install'] = client.installation_info[idx]
 
-    _LOGGER.debug(
+    _LOGGER.info(
         "Location/TCS (temperature control system) used is: %s [%s]", 
         client.installation_info[idx] \
             ['gateways'][0]['temperatureControlSystems'][0]['systemId'],
         client.installation_info[idx] \
-            ['locationInfo']['name'],
+            ['locationInfo']['name']
     )
 
 
@@ -303,37 +303,37 @@ def _updateStateData(domain_data, force_refresh=False):
     idx = domain_data['config'][CONF_LOCATION_IDX]
         
     if True:
-        _LOGGER.debug("Calling v2 API [1 request(s)]: client.locations[idx].status()...")
+        _LOGGER.info("Calling v2 API [1 request(s)]: client.locations[idx].status()...")
 
     # this data is emphemeral, so store it
         ec2_status = client.locations[idx].status()
         ec2_tcs = ec2_status['gateways'][0]['temperatureControlSystems'][0]
 
-        _LOGGER.debug("ec2_api.status() = %s", ec2_status)
+        _LOGGER.info("ec2_api.status() = %s", ec2_status)
 
     if domain_data['config'][CONF_HIGH_PRECISION] \
         and len(client.locations) > 1:
         _LOGGER.warn("Unable to increase precision of temperatures via the v1 api as there is more than one Location/TCS.  Continuing with v2 temps.")
         
     elif domain_data['config'][CONF_HIGH_PRECISION] is True:
-        _LOGGER.debug("Trying to increase precision of temperatures via the v1 api...")
+        _LOGGER.info("Trying to increase precision of temperatures via the v1 api...")
         try:
             from evohomeclient import EvohomeClient as EvohomeClientVer1  ## uses v1 of the api
             ec1_api = EvohomeClientVer1(client.username, client.password)
 
-            _LOGGER.debug("Calling v1 API [2 requests]: client.temperatures()...")
+            _LOGGER.info("Calling v1 API [2 requests]: client.temperatures()...")
             ec1_temps = ec1_api.temperatures(force_refresh=True)  # is a generator
-            _LOGGER.debug("ev_api.temperatures() = %s", ec1_temps)
+            _LOGGER.info("ev_api.temperatures() = %s", ec1_temps)
 
             for temp in ec1_temps:
-                _LOGGER.debug("Zone %s (%s) reports temp %s", temp['id'], temp['name'], temp['temp'])
+                _LOGGER.info("Zone %s (%s) reports temp %s", temp['id'], temp['name'], temp['temp'])
 
                 for zone in ec2_tcs['zones']:
-                    _LOGGER.debug(" - is it slave %s (%s)?", zone['zoneId'], zone['name'])
+                    _LOGGER.info(" - is it slave %s (%s)?", zone['zoneId'], zone['name'])
 
                     if str(temp['id']) == str(zone['zoneId']):
-                        _LOGGER.debug(" - matched: temp changed from %s to %s.", zone['temperatureStatus']['temperature'], temp['temp'])
-                        _LOGGER.debug(" - matched: temp for child %s (%s) changed from %s to %s.", zone['zoneId'], zone['name'], zone['temperatureStatus']['temperature'], temp['temp'])
+                        _LOGGER.info(" - matched: temp changed from %s to %s.", zone['temperatureStatus']['temperature'], temp['temp'])
+                        _LOGGER.info(" - matched: temp for child %s (%s) changed from %s to %s.", zone['zoneId'], zone['name'], zone['temperatureStatus']['temperature'], temp['temp'])
                         zone['temperatureStatus']['temperature'] = temp['temp']
 
                         break
@@ -355,14 +355,14 @@ def _updateStateData(domain_data, force_refresh=False):
 
 
 # Some of this data should be redacted before getting into the logs
-    if _LOGGER.isEnabledFor(logging.DEBUG):
+    if _LOGGER.isEnabledFor(logging.INFO):
         idx = domain_data['config'][CONF_LOCATION_IDX]
         
         _tmp = dict(client.installation_info[idx])
         _tmp['locationInfo']['postcode'] = 'REDACTED'
         
-        _LOGGER.debug("client.installation_info[idx]: %s", _tmp)
-        _LOGGER.debug("hass.data[DATA_EVOHOME]: %s", domain_data)
+        _LOGGER.info("client.installation_info[idx]: %s", _tmp)
+        _LOGGER.info("hass.data[DATA_EVOHOME]: %s", domain_data)
         _tmp = None
 
     return True
@@ -538,7 +538,7 @@ class evoEntity(Entity):
     @callback
     def _connect(self, packet):
         """Process a dispatcher connect."""
-        _LOGGER.debug(
+        _LOGGER.info(
             "%s has received a '%s' packet from %s",
             self._id + " [" + self.name + "]",
             packet['signal'],
@@ -546,7 +546,7 @@ class evoEntity(Entity):
         )
 
         if packet['signal'] == 'update':
-            _LOGGER.debug(
+            _LOGGER.info(
                 "%s is calling schedule_update_ha_state(force_refresh=True)...",
                 self._id + " [" + self.name + "]"
             )
@@ -946,9 +946,11 @@ class evoController(evoEntity):
         
         if not _expired:  # timer not expired, so exit
             _LOGGER.info(
-                "update(TCS) scan_interval not expired, exiting..."
+                "update(TCS) scan_interval not expired, skipping update"
             )
             return
+
+        _LOGGER.info("update(TCS), self.hass.data[DATA_EVOHOME] (before) = %s", self.hass.data[DATA_EVOHOME])
 
 ## Otherwise do a simple update, or a full refresh
         _expired = _timeout > self._timers['installExpires']
@@ -957,14 +959,15 @@ class evoController(evoEntity):
             _timeout, ">" if _expired else "<",
             self._timers['installExpires'])
         
-        if _expired:  # do s simple update of state date
+        if _expired:  # do a simple update of status (state data)
             _LOGGER.info("update(TCS) oauth Token expired: full refresh...",)
             _updateStateData(self.hass.data[DATA_EVOHOME], force_refresh=True)
 
-        else:  # do a full_refresh
+        else:  # do a full_refresh, installation & status
             _LOGGER.info("update(TCS) oauth Token unexpired: update only...")
             _updateStateData(self.hass.data[DATA_EVOHOME])
             
+        _LOGGER.info("update(TCS), self.hass.data[DATA_EVOHOME] (before) = %s", self.hass.data[DATA_EVOHOME])
 
 ## Finally, send a message to the slaves to update themselves
         _packet = {'sender': 'controller', 'signal': 'update'}
@@ -1029,6 +1032,20 @@ class evoSlaveEntity(evoEntity):
 
         _LOGGER.debug("__init__(Slave=%s)", self._id + " [" + self.name + "]")
         return None  # __init__() should return None
+
+    @property
+    def should_poll(self):
+        """Slaves (heating/DHW zones) should not be polled as the (master) Controller maintains state data."""
+        _poll = False
+        _LOGGER.debug("should_poll(%s) = %s", self._id, _poll)
+        return _poll
+
+    @property
+    def force_update(self):
+        """Slaves (heating/DHW zones) are not (normally) polled, and should be forced to update."""
+        _force = True
+        _LOGGER.debug("force_update(%s) = %s", self._id, _force)
+        return _force
 
     @property
     def supported_features(self):
@@ -1187,20 +1204,6 @@ class evoSlaveEntity(evoEntity):
         _LOGGER.debug("assumed_state(%s) = %s", self._id, self._assumed_state)
         return self._assumed_state
 
-    @property
-    def should_poll(self):
-        """The (master) Controller maintains state data, so (slave) zones should not be polled."""
-        _poll = False
-        _LOGGER.debug("should_poll(%s) = %s", self._id, _poll)
-        return _poll
-
-    @property
-    def force_update(self):
-        """Zones should TBA."""
-        _force = False
-        _LOGGER.debug("force_update(%s) = %s", self._id, _force)
-        return _force
-
 
     def update(self):
         """Get the latest state data (e.g. temp.) of the Heating/DHW zone."""
@@ -1211,7 +1214,7 @@ class evoSlaveEntity(evoEntity):
 #           _LOGGER.error("update(%s) ec_status = {}")
 #       else:
 #           _LOGGER.debug("update(%s) ec_status = %s", ec_status)
-        _LOGGER.debug("update(%s) = %s", self._id)
+        _LOGGER.info("update(%s)", self._id)
         return True
 
 
@@ -1301,7 +1304,7 @@ class evoZone(evoSlaveEntity, ClimateDevice):
         return _state
 
     @property
-    def xstate_attributes(self):
+    def OUT_state_attributes(self):
         """Return the optional state attributes."""
         data = {
             ATTR_CURRENT_TEMPERATURE: show_temp(
