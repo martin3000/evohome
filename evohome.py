@@ -87,6 +87,8 @@ CONF_HIGH_PRECISION = 'high_precision'
 CONF_USE_HEURISTICS = 'use_heuristics'
 CONF_USE_SCHEDULES = 'use_schedules'
 CONF_LOCATION_IDX = 'location_idx'
+CONF_AWAY_TEMP = 'away_temp_is'
+CONF_OFF_TEMP = 'off_temp_is'
 
 from homeassistant.core                import callback
 from homeassistant.helpers.discovery   import load_platform
@@ -136,6 +138,8 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_USE_SCHEDULES, default=False): cv.boolean,
         
         vol.Optional(CONF_LOCATION_IDX, default=0): cv.positive_int,
+        vol.Optional(CONF_AWAY_TEMP, default=10): cv.positive_int,
+        vol.Optional(CONF_OFF_TEMP, default=5): cv.positive_int,
     }),
 }, extra=vol.ALLOW_EXTRA)
 
@@ -868,9 +872,11 @@ class evoController(evoEntity):
                 for _zone in _zones:
                     if _zone[SETPOINT_STATUS]['setpointMode'] != EVO_PERMOVER:
                         _zone[SETPOINT_STATUS]['setpointMode'] = EVO_FOLLOW
-                # default target for 'Away' is 10C, assume that for now
-                    if self._config[CONF_USE_SCHEDULES]:
-                        _zone[SETPOINT_STATUS][TARGET_TEMPERATURE] = 10
+# Leave this for slave.current_temperature
+#               # default target for 'Away' is 10C, assume that for now
+#                   if self._config[CONF_USE_SCHEDULES]:
+#                       _zone[SETPOINT_STATUS][TARGET_TEMPERATURE] \
+#                           = self._config[CONF_AWAY_TEMP]
                 if 'dhw' in self._status:
                     _zone = self._status['dhw']
                     if _zone['stateStatus']['mode'] != EVO_PERMOVER:
@@ -882,9 +888,10 @@ class evoController(evoEntity):
                     if _zone[SETPOINT_STATUS]['setpointMode'] != EVO_PERMOVER:
                         _zone[SETPOINT_STATUS]['setpointMode'] \
                             = EVO_FOLLOW
-                # default target for 'HeatingOff' is 5C, assume that for now
-                    if self._config[CONF_USE_SCHEDULES]:
-                        _zone[SETPOINT_STATUS][TARGET_TEMPERATURE] = 5
+# Leave this for slave.current_temperature
+#               # default target for 'HeatingOff' is 5C, assume that for now
+#                   if self._config[CONF_USE_SCHEDULES]:
+#                       _zone[SETPOINT_STATUS][TARGET_TEMPERATURE] = 5
 
 
 ## Finally, , Inform the Zones that their state may have changed
@@ -1147,9 +1154,6 @@ class evoSlaveEntity(evoEntity):
     def current_temperature(self):
         """Return the current temperature of the Heating/DHW zone."""
 # TBD: use client's own state data (should work for DHW too)
-        _LOGGER.info("current_temperature(%s) (NEW way) = %s", 
-            self._id, self._status['temperatureStatus']['temperature'])
-            
 #       _status = self._status
 
 # TBD: since that doesn't work (yet), use hass.data[DATA_EVOHOME]['status']
@@ -1166,8 +1170,9 @@ class evoSlaveEntity(evoEntity):
             _temp = None
             _LOGGER.warn("current_temperature(%s) - is unavailable", self._id)
 
-        _LOGGER.info("current_temperature(%s) (OLD way) = %s", 
-            self._id, _temp)
+        _LOGGER.info("current_temperature(%s) NEW way = %s, OLD way = %s", 
+            self._id, _temp, 
+            self._status['temperatureStatus']['temperature'])
 
         return _temp
 
@@ -1398,12 +1403,12 @@ class evoZone(evoSlaveEntity, ClimateDevice):
         if self._config[CONF_USE_HEURISTICS]:
         # get the system's current operating mode
             _cont_opmode = self.hass.data[DATA_EVOHOME]['status'] \
-            ['systemModeStatus']['mode']
+                ['systemModeStatus']['mode']
 
             if _cont_opmode == EVO_HEATOFF:
-                _temp = 5
+                _temp = self._config[CONF_OFF_TEMP]
             elif _cont_opmode == EVO_AWAY:
-                _temp = 10
+                _temp = self._config[CONF_AWAY_TEMP]
 
             _LOGGER.debug(
                 "target_temperature(Zone=%s) = %s (using heuristics)",

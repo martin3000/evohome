@@ -42,9 +42,9 @@ evohome:
 0. Zones may incorrectly report OpenWindowMode (e.g. when Controller is set to HeatingOff).  The hueristics will be improved in future releases.
 1. FIXED, option b): The controller, which doesn't have a `current_temperature` is implemented as a climate entity, and HA expects all climate entities to report a temperature.  So you will see an empty temperature graph for this entity.  A fix will require: a) changing HA (to accept a climate entity without a temperature (like a fan entity), or; b) changing the controller to a different entity class (but this may break some of the away mode integrations planned for the future).
 2. Away mode (as understood by HA), is not implemented as yet - however, you can use service calls to `climate.set_operation_mode` with the controller or zone entities to set Away mode (as understood by evohome).
-3. FIXED: The underlying api (evohomeclient2) has some issues (e.g. no provision to refresh OAuth tokens, that caused failure after 1 hour).  A proper fix will require changes to evohomeclient2 (possibly causing the existing honeywell component to break).
+3. FIXED: The underlying api (evohomeclient2) has some issues (e.g. no provision to refresh OAuth tokens, that caused failure after 1 hour).  A proper fix will require changes to evohomeclient2 (possibly causing the existing honeywell component to break).  Now FIXED in both evohomeclient api, and in evohome custom component.
 4. FIXED (architecturally, but still a little messy): The code is currently messy, and architecturally unsatisfying (e.g. the controller updates the zones' private attributes directly).
-5. FIXED: No provision for DHW (yet).  This is in progress.
+5. WIP: No provision for DHW (yet).  This is in progress.
 6. WIP: No provision for schedules (yet).  This is in progress.
 7. The `scan_interval` parameter defaults to 180 secs, and could be as low as 60 secs.  This is OK as this code polls Honeywell servers only 1x (or 3x) per scan interval (+2 polls for v1 temperatures), or 60 per hour.  This compares to the existing evohome implementation, which is at least one poll per zone per scan interval.  I understand that up to 250 polls per hour is considered OK, YMMV.
 8. DHW is represented as a switch (with an operating mode) and a switch (for temp).  Presently, there is no 'boiler' entity type in HA.
