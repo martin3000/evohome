@@ -17,7 +17,7 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 
-def setup_platform(hass, config, add_devices, discovery_info=None):
+def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up a Honeywell evohome CH/DHW system."""
 
     _LOGGER.debug("Started: setup_platform()")
@@ -69,8 +69,8 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
         
     master = evoController(hass, ec_api, tcsObjRef, slaves)
     
-# Now, for efficiency) add controller and all zones in a single call
-    add_devices([master] + slaves, False)
+# for efficiency, add controller + all zones in a single call (add_devices)
+    add_entities([master] + slaves, update_before_add=False)
 
     _LOGGER.debug("Finished: setup_platform()")
     return True
