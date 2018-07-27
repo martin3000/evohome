@@ -59,7 +59,6 @@ from homeassistant.components.switch import (
 )
 
 from homeassistant.const import (
-#   ATTR_ASSUMED_STATE = 'assumed_state',
 #   ATTR_STATE = 'state',
 #   ATTR_SUPPORTED_FEATURES = 'supported_features'
 #   ATTR_TEMPERATURE = 'temperature'
@@ -68,7 +67,7 @@ from homeassistant.const import (
     CONF_USERNAME,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
-    
+
     DEVICE_CLASS_TEMPERATURE,
 
     EVENT_HOMEASSISTANT_START,
@@ -163,10 +162,9 @@ EVO_FROSTMODE  = 'FrostProtect'
 
 # bit masks for packets
 EVO_MASTER = 0x01
-EVO_TCS    = 0x03
-EVO_SLAVE  = 0x04
-EVO_ZONE   = 0x12
-EVO_DHW    = 0x14
+EVO_SLAVE  = 0x02
+EVO_ZONE   = 0x04
+EVO_DHW    = 0x08
 
 TCS_MODES = [EVO_RESET, EVO_AUTO, EVO_AUTOECO, EVO_AWAY, EVO_DAYOFF, EVO_CUSTOM, EVO_HEATOFF]
 DHW_STATES = {STATE_ON : 'On', STATE_OFF : 'Off'}
@@ -252,19 +250,19 @@ def setup(hass, config):
         _LOGGER.debug("_first_update()")
 
 ## Finally, send a message to the master to di its first update
-        _packet = {
-            'sender': 'setup', 
+        packet = {
+            'sender': 'setup',
             'signal': 'update',
             'to': EVO_MASTER
             }
-        _LOGGER.debug(" - sending a dispatcher packet, %s...", _packet)
+        _LOGGER.debug(" - sending a dispatcher packet, %s...", packet)
 ## this invokes def async_dispatcher_send(hass, signal, *args) on zones:
         hass.helpers.dispatcher.async_dispatcher_send(
             DISPATCHER_EVOHOME,
-            _packet
+            packet
         )
 
-            
+
 # create a listener for update packets...
     hass.bus.listen(EVENT_HOMEASSISTANT_START, _first_update)
 
@@ -503,34 +501,53 @@ class evoEntity(Entity):
         self.client = client
 
         self._obj = objRef
+        self._available = False
+        self._should_poll = False
+
         self._config = hass.data[DATA_EVOHOME]['config']
 
 # create a listener for (internal) update packets...
         hass.helpers.dispatcher.async_dispatcher_connect(
             DISPATCHER_EVOHOME,
             self._connect
-        )  # for: def async_dispatcher_connect(signal, target)
+            )  # for: def async_dispatcher_connect(signal, target)
 
         return None  # __init__() should return None
-    
-    
+
+
     @property
     def available(self):
-        """Dunno"""
+        """All evohome entities are STATE_UNAVAILABLE until after HA has
+           started, when the state data is then retrieved by the Controller."""
         _LOGGER.debug("available(%s) = %s", self._id, self._available)
         return self._available
+
+    @property
+    def should_poll(self):
+        """The Controller will usually (but not always) be polled, and it will
+           provide the state data for its slaves, which are never polled."""
+        _LOGGER.debug("should_poll(%s) = %s", self._id, self._should_poll)
+        return self._should_poll
+
+    @property
+    def force_update(self):
+        """Slaves (heating/DHW zones) are not (normally) polled, and should be forced to update."""
+#       _force = self._type & EVO_SLAVE
+        _force = False
+        _LOGGER.debug("force_update(%s) = %s", self._id, _force)
+        return _force
 
     @callback
     def _connect(self, packet):
         """Process a dispatcher connect."""
-        _LOGGER.debug(
-            "%s (type: %s) has received a '%s' packet from %s, to %s",
+        _LOGGER.debug("%s (self._type: %s) has received " \
+                + "a '%s' packet from %s, addressed to type %s",
             self._id + " [" + self.name + "]",
             self._type,
             packet['signal'],
             packet['sender'],
             packet['to']
-        )
+            )
 
         if packet['to'] & self._type:
             if packet['signal'] == 'update':
@@ -538,17 +555,12 @@ class evoEntity(Entity):
                         + "schedule_update_ha_state(force_refresh=True)...",
                     self._id + " [" + self.name + "]"
                     )
-# for all entity types this must have force_refresh=True 
+# for all entity types this must have force_refresh=True
                 self.async_schedule_update_ha_state(force_refresh=True)
-                self._assumed_state = False
-                self._available = True
-
-            elif packet['signal'] == 'assume':
-                self._assumed_state = True
 
         return
 
-        
+
     def _getZoneSchedTemp(self, zone, dt=None):
 
         _LOGGER.debug(
@@ -623,16 +635,15 @@ class evoEntity(Entity):
 
 
 class evoController(evoEntity):
-    """Base for a Honeywell evohome TCS (temperature control system) hub device (aka Controller)."""
+    """Base for a Honeywell evohome hub/master device (aka Controller/TCS, temperature control system)."""
 
     def __init__(self, hass, client, objRef, objZones=[]):
         """Initialize the evohome Controller."""
         super().__init__(hass, client, objRef)
 
         self._id = objRef.systemId
-        self._type = EVO_MASTER & EVO_TCS
+        self._type = EVO_MASTER
         self._should_poll = True
-        self._available = False
 
         self._zones = objZones
 #       self._dhw = objDhw
@@ -658,21 +669,8 @@ class evoController(evoEntity):
         _LOGGER.debug("__init__(TCS=%s), self._install = %s",
             self._id, self._install)
 
-            
-        return None  # __init__() should return None
-    
-    @property
-    def should_poll(self):
-        """Controller should TBA. The controller will provide the state data."""
-        _LOGGER.debug("should_poll(TCS=%s) = %s", self._id, self._should_poll)
-        return self._should_poll
 
-    @property
-    def force_update(self):
-        """Controllers should update when state date is updated, even if it is unchanged."""
-        _force = False
-        _LOGGER.debug("force_update(TCS=%s) = %s", self._id,  _force)
-        return _force
+        return None  # __init__() should return None
 
     @property
     def name(self):
@@ -800,25 +798,11 @@ class evoController(evoEntity):
 # EVO_DAYOFF,  it resets EVO_TEMPOVER (but not EVO_PERMOVER) to EVO_FOLLOW
 
         if self._config[CONF_USE_HEURISTICS]:
-            _LOGGER.debug(
-                " - updating Zone state data, Controller is '%s'",
+            _LOGGER.debug(" - updating Zone state data, Controller is '%s'",
                 operation_mode
-            )
+                )
 
-## First, Inform the Zones that their state is now 'assumed'
-            _packet = {
-                'sender': 'controller', 
-                'signal': 'assume',
-                'to': EVO_SLAVE
-                }
-            _LOGGER.debug(" - sending a dispatcher packet, %s...", _packet)
-## invokes def async_dispatcher_send(hass, signal, *args) on zones:
-            self.hass.helpers.dispatcher.async_dispatcher_send(
-                DISPATCHER_EVOHOME,
-                _packet
-            )
-
-## Second, Update target_temp of the Zones
+## Update target_temp of the Zones
             _zones = self._status['zones']
 
             if operation_mode == EVO_CUSTOM:
@@ -898,16 +882,16 @@ class evoController(evoEntity):
 
 ## Finally, , Inform the Zones that their state may have changed
 #           self.hass.bus.fire('mode_changed', {ATTR_ENTITY_ID: self._scs_id, ATTR_STATE: command})
-            _packet = {
-                'sender': 'controller', 
+            packet = {
+                'sender': 'controller',
                 'signal': 'update',
                 'to': EVO_SLAVE
                 }
-            _LOGGER.debug(" - sending a dispatcher packet, %s...", _packet)
+            _LOGGER.debug(" - sending a dispatcher packet, %s...", packet)
 ## invokes def async_dispatcher_send(hass, signal, *args) on zones:
             self.hass.helpers.dispatcher.async_dispatcher_send(
                 DISPATCHER_EVOHOME,
-                _packet
+                packet
             )
 
 ## At the end, the last thing to do is restart updates()
@@ -966,10 +950,10 @@ class evoController(evoEntity):
 
     def update(self):
 # We can't use async_update() because the client api is not asyncio
-        """Get the latest state (operating mode) of the controller and
-        update the state (temp, setpoint) of all children zones.
+        """Get the latest state data (operating mode) of the Controller and
+        update the (internal) state data (temp, setpoint) of all slaves.
 
-        Get the latest schedule of the controller every hour."""
+        Also, (TBA) get the latest schedule every hour."""
 
         _LOGGER.debug("update(TCS=%s)", self._id)
 # Wait a minimum of scan_interval/60 minutes(rounded down) between updates
@@ -1006,20 +990,21 @@ class evoController(evoEntity):
             _updateStateData(self.hass.data[DATA_EVOHOME])
 
         self._status = self.hass.data[DATA_EVOHOME]['status']
+        self._available = True
 
         _LOGGER.debug("update(TCS), self.hass.data[DATA_EVOHOME] (after) = %s", self.hass.data[DATA_EVOHOME])
 
 ## Finally, send a message to the slaves to update themselves
-        _packet = {
-            'sender': 'controller', 
+        packet = {
+            'sender': 'controller',
             'signal': 'update',
             'to': EVO_SLAVE
             }
-        _LOGGER.debug(" - sending a dispatcher packet, %s...", _packet)
+        _LOGGER.debug(" - sending a dispatcher packet, %s...", packet)
 ## this invokes def async_dispatcher_send(hass, signal, *args) on zones:
         self.hass.helpers.dispatcher.async_dispatcher_send(
             DISPATCHER_EVOHOME,
-            _packet
+            packet
         )
 
         _LOGGER.debug("update(TCS=%s), self._install = %s",
@@ -1030,6 +1015,7 @@ class evoController(evoEntity):
             _LOGGER.debug("update(TCS=%s), self._schedule = %s",
                 self._id, self._schedule)
 
+                
         return True
 
 
@@ -1043,17 +1029,17 @@ class evoSlaveEntity(evoEntity):
 
         self._id = objRef.zoneId  # OK for DHW too, as == objRef.dhwId
         self._type = EVO_SLAVE
-
-        self._assumed_state = True  # is this right for polled IOT devices?
-        self._available = False
+        _LOGGER.debug("__init__(%s), self._type = %s", self._id, self._type)
 
         self._config = hass.data[DATA_EVOHOME]['config']
 #       self._timers = hass.data[DATA_EVOHOME]['timers']
 
         if self._obj.zone_type == 'domesticHotWater':
+            self._type = self._type | EVO_DHW
             self._install = hass.data[DATA_EVOHOME]['install'] \
                 ['gateways'][0]['temperatureControlSystems'][0]['dhw']
         else:
+            self._type = self._type | EVO_ZONE
             for _zone in hass.data[DATA_EVOHOME]['install'] \
                 ['gateways'][0]['temperatureControlSystems'][0]['zones']:
                 if _zone['zoneId'] == self._id:
@@ -1066,26 +1052,11 @@ class evoSlaveEntity(evoEntity):
 
         _LOGGER.debug("__init__(%s), self._config = %s",
             self._id, self._config)
-#       _LOGGER.debug("__init__(%s), self._timers = %s",
-#           self._id, self._timers)
+#       _LOGGER.debug("__init__(%s), self._timers = %s", self._id, self._timers)
         _LOGGER.debug("__init__(%s), self._install = %s",
             self._id, self._install)
 
         return None  # __init__() should return None
-
-    @property
-    def should_poll(self):
-        """Slaves (heating/DHW zones) should not be polled as the (master) Controller maintains state data."""
-        _poll = False
-        _LOGGER.debug("should_poll(%s) = %s", self._id, _poll)
-        return _poll
-
-    @property
-    def force_update(self):
-        """Slaves (heating/DHW zones) are not (normally) polled, and should be forced to update."""
-        _force = False
-        _LOGGER.debug("force_update(%s) = %s", self._id, _force)
-        return _force
 
     @property
     def supported_features(self):
@@ -1245,9 +1216,9 @@ class evoSlaveEntity(evoEntity):
         _LOGGER.debug("precision(%s) = %s", self._id, _precision)
         return _precision
 
-    @property
-    def assumed_state(self) -> bool:
-        """Return True if unable to access real state of the entity."""
+
+    def update(self):
+        """Get the latest state data (e.g. temp.) of the Heating/DHW zone."""
 # After (say) a controller.set_operation_mode, it will take a while for the
 # 1. (invoked) client api call (request.xxx) to reach the web server,
 # 2. web server to send message to the controller
@@ -1256,14 +1227,7 @@ class evoSlaveEntity(evoEntity):
 # 5. next client api call (every scan_interval)
 # in between 1. and 5., should assumed_state be True ??
 
-        _LOGGER.debug("assumed_state(%s) = %s", self._id, self._assumed_state)
-        return self._assumed_state
-
-
-    def update(self):
-        """Get the latest state data (e.g. temp.) of the Heating/DHW zone."""
-
-        _LOGGER.debug("update(TCS=%s)", self._id)
+        _LOGGER.debug("update(Slave=%s)", self._id)
 # Needs IDX?
         if self._obj.zone_type == 'domesticHotWater':
             self._install = self.hass.data[DATA_EVOHOME]['install'] \
@@ -1279,7 +1243,9 @@ class evoSlaveEntity(evoEntity):
                 if _zone['zoneId'] == self._id:
                     self._status = _zone
                     break
+        self._available = True
 
+                
 # WIP - need to add an expiry timer...
         if self._config[CONF_USE_SCHEDULES]:
             _LOGGER.debug(
@@ -1332,7 +1298,7 @@ class evoZone(evoSlaveEntity, ClimateDevice):
         A zone's state is usually its operation mode, but they can enter
         OpenWindowMode autonomously, or they can be 'Off', or just set to 5.0C.
         In all three case, the client api seems to report 5C.
-        
+
         This is complicated futher by the possibility that the minSetPoint is
         greater than 5C."""
 
@@ -1342,10 +1308,10 @@ class evoZone(evoSlaveEntity, ClimateDevice):
         zone_opmode = self._status[SETPOINT_STATUS]['setpointMode']
         tcs_opmode = self.hass.data[DATA_EVOHOME]['status'] \
             ['systemModeStatus']['mode']
-        
+
 # Optionally, use heuristics to override reported state (mode)
         if self._config[CONF_USE_HEURISTICS]:
-            if tcs_opmode == EVO_HEATOFF: 
+            if tcs_opmode == EVO_HEATOFF:
                 state = EVO_FROSTMODE
             elif zone_target == 5:
                 if zone_opmode == EVO_FOLLOW:
@@ -1354,16 +1320,16 @@ class evoZone(evoSlaveEntity, ClimateDevice):
             else:
                 pass
 
-            _LOGGER.debug("state(Zone=%s) = %s (using heuristics)", 
-                self._id, 
+            _LOGGER.debug("state(Zone=%s) = %s (using heuristics)",
+                self._id,
                 state
                 )
         else:
-            _LOGGER.debug("state(Zone=%s) = %s (latest actual)", 
-                self._id, 
+            _LOGGER.debug("state(Zone=%s) = %s (latest actual)",
+                self._id,
                 state
                 )
-        
+
         _LOGGER.debug(
             "state(Zone=%s) = %s [tcs_opmode=%s, opmode=%s, target=%s]",
             self._id + " [" + self.name + "]",
@@ -1445,7 +1411,7 @@ class evoZone(evoSlaveEntity, ClimateDevice):
 
 #           temperature  = kwargs.get(ATTR_TEMPERATURE)
 #           until = kwargs.get(ATTR_UNTIL)
-            
+
 # FollowSchedule - return to scheduled target temp (indefinitely)
         if operation_mode == EVO_FOLLOW:
             if temperature is not None or until is not None:
@@ -1482,8 +1448,8 @@ class evoZone(evoSlaveEntity, ClimateDevice):
                     )
 
             _LOGGER.debug("Calling API [? request(s)]: " \
-                    + " zone.set_temperature(%s)...", 
-                temperature 
+                    + " zone.set_temperature(%s)...",
+                temperature
                 )
             self._obj.set_temperature(temperature)
 
@@ -1500,8 +1466,8 @@ class evoZone(evoSlaveEntity, ClimateDevice):
                 until = datetime.now() + timedelta(1/24) ## use .utcnow() or .now() ??
 
             _LOGGER.debug("Calling API [? request(s)]: " \
-                    + "zone.set_temperature(%s, %s)...", 
-                temperature, 
+                    + "zone.set_temperature(%s, %s)...",
+                temperature,
                 until
                 )
             self._obj.set_temperature(temperature, until)
@@ -1573,8 +1539,8 @@ class evoZone(evoSlaveEntity, ClimateDevice):
 #  otherwise: TemporaryOverride - override target temp, until some time
 
         _LOGGER.debug("Calling API [? request(s)]: " \
-                + "zone.set_temperature(%s, %s)...", 
-            setpoint, 
+                + "zone.set_temperature(%s, %s)...",
+            setpoint,
             until
             )
         self._obj.set_temperature(temperature, until)
@@ -1623,11 +1589,6 @@ class evoDhwEntity(evoSlaveEntity):
         if _state is None:
             _state = self._status['stateStatus']['state']
 
-            if self.assumed_state:
-                _LOGGER.debug("_get_state(DHW=%s), state is %s (assumed)", self._id, _state)
-            else:
-                _LOGGER.debug("_get_state(DHW=%s), state is %s (latest actual)", self._id, _state)
-
         _LOGGER.debug("_get_state(DHW=%s) = %s", self._id, _state)
         return _state
 
@@ -1655,7 +1616,6 @@ class evoDhwEntity(evoSlaveEntity):
         self._obj._set_dhw(_data)
 
         self._status['stateStatus']['state'] = _state
-        self._assumed_state = True
         self.async_schedule_update_ha_state(force_refresh=False)
 
         return None
@@ -1716,7 +1676,7 @@ class evoDhwEntity(evoSlaveEntity):
         if operation_mode == EVO_TEMPOVER:
             _until = datetime.now() + timedelta(hours=1)
             _until =_until.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
+
         else:
             _until = None
 
