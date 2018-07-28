@@ -172,13 +172,17 @@ DHW_STATES = {STATE_ON : 'On', STATE_OFF : 'Off'}
 SCAN_INTERVAL = 'scan_interval'
 REFRESH_INTERVAL = 'refresh_interval'
 
+### Check list:
+# - no I/O inside properties (DONE)
+# - I/O only inside setup(), update() & set_*() (WIP)
+
 
 def setup(hass, config):
     """Set up a Honeywell evoTouch heating system (1 controller and multiple zones).""" # noqa
     _LOGGER.debug("setup(), temperature units are: %s...", TEMP_CELSIUS)
 
 ### pull the configuration parameters  (TBD: excludes US-based systems)...
-    hass.data[DATA_EVOHOME] = {}  # without this, KeyError: 'data_evohome'
+    hass.data[DATA_EVOHOME] = {}
     hass.data[DATA_EVOHOME]['timers'] = {}
     hass.data[DATA_EVOHOME]['config'] = dict(config[DOMAIN])
 
@@ -273,15 +277,6 @@ def setup(hass, config):
     return True
 
 
-def _updateStateData(domain_data, force_refresh=False):
-    _LOGGER.debug("_updateStateData() begins...")
-
-    _updateInstallData(domain_data, force_refresh)
-#   _updateScheduleData(domain_data, force_refresh)
-    _updateStatusData(domain_data, force_refresh)
-    return
-
-
 def _updateInstallData(domain_data, force_refresh=False):
     _LOGGER.debug("_updateInstallData() begins...")
 
@@ -344,7 +339,7 @@ def _updateInstallData(domain_data, force_refresh=False):
     return True
 
 
-def _updateScheduleData(domain_data, force_refresh=False):
+def _updateScheduleData(domain_data):
     _LOGGER.debug("_updateScheduleData() begins...")
 
     client = domain_data['evohomeClient']
@@ -372,7 +367,7 @@ def _updateScheduleData(domain_data, force_refresh=False):
     return True
 
 
-def _updateStatusData(domain_data, force_refresh=False):
+def _updateStatusData(domain_data):
     _LOGGER.debug("_updateStatusData() begins...")
 
     client = domain_data['evohomeClient']
@@ -518,7 +513,7 @@ class evoEntity(Entity):
     @property
     def available(self):
         """All evohome entities are STATE_UNAVAILABLE until after HA has
-           started, when the state data is then retrieved by the Controller."""
+           started, when state data is fist  retrieved by the Controller."""
         _LOGGER.debug("available(%s) = %s", self._id, self._available)
         return self._available
 
@@ -526,16 +521,16 @@ class evoEntity(Entity):
     def should_poll(self):
         """The Controller will usually (but not always) be polled, and it will
            provide the state data for its slaves, which are never polled."""
-        _LOGGER.debug("should_poll(%s) = %s", self._id, self._should_poll)
+        _LOGGER.info("should_poll(%s) = %s", self._id, self._should_poll)
         return self._should_poll
 
-    @property
-    def force_update(self):
-        """Slaves (heating/DHW zones) are not (normally) polled, and should be forced to update."""
-#       _force = self._type & EVO_SLAVE
-        _force = False
-        _LOGGER.debug("force_update(%s) = %s", self._id, _force)
-        return _force
+#   @property
+#   def force_update(self):
+#       """Slaves (heating/DHW zones) should be forced to update."""
+##      _force = self._type & EVO_SLAVE
+#       _force = False
+#       _LOGGER.debug("force_update(%s) = %s", self._id, _force)
+#       return _force
 
     @callback
     def _connect(self, packet):
@@ -955,14 +950,14 @@ class evoController(evoEntity):
 
         Also, (TBA) get the latest schedule every hour."""
 
-        _LOGGER.debug("update(TCS=%s)", self._id)
+        _LOGGER.info("update(TCS=%s)", self._id)
 # Wait a minimum of scan_interval/60 minutes(rounded down) between updates
         _timeout = datetime.now() + timedelta(seconds=59)
 
 # Exit now if timer has not expired
         _expired = _timeout > self._timers['statusExpires']
 
-        _LOGGER.debug("update(TCS) time = %s %s statusExpires = %s",
+        _LOGGER.info("update(TCS) time = %s %s statusExpires = %s",
             _timeout, ">" if _expired else "<",
             self._timers['statusExpires'])
 
@@ -972,22 +967,24 @@ class evoController(evoEntity):
             )
             return
 
-        _LOGGER.debug("update(TCS), self.hass.data[DATA_EVOHOME] (before) = %s", self.hass.data[DATA_EVOHOME])
+        _LOGGER.info("update(TCS), self.hass.data[DATA_EVOHOME] (before) = %s", self.hass.data[DATA_EVOHOME])
 
 ## Otherwise do a simple update, or a full refresh
         _expired = _timeout > self._timers['installExpires']
 
-        _LOGGER.debug("update(TCS) time = %s %s installExpires = %s",
+        _LOGGER.info("update(TCS) time = %s %s installExpires = %s",
             _timeout, ">" if _expired else "<",
             self._timers['installExpires'])
 
         if _expired:  # do a full_refresh, installation & status
-            _LOGGER.debug("update(TCS) oauth Token expired: full refresh...",)
-            _updateStateData(self.hass.data[DATA_EVOHOME], force_refresh=True)
+            _LOGGER.info("update(TCS) oauth Token expired: full refresh...",)
+            _updateInstallData(self.hass.data[DATA_EVOHOME], force_refresh=True)
+        #   _updateScheduleData(self.hass.data[DATA_EVOHOME])
+            _updateStatusData(self.hass.data[DATA_EVOHOME])
 
         else:  # do a simple update of status (state data)
-            _LOGGER.debug("update(TCS) oauth Token unexpired: update only...")
-            _updateStateData(self.hass.data[DATA_EVOHOME])
+            _LOGGER.info("update(TCS) oauth Token unexpired: update only...")
+            _updateStatusData(self.hass.data[DATA_EVOHOME])
 
         self._status = self.hass.data[DATA_EVOHOME]['status']
         self._available = True
@@ -1280,6 +1277,7 @@ class evoSlaveEntity(evoEntity):
 class evoZone(evoSlaveEntity, ClimateDevice):
     """Base for a Honeywell evohome Heating zone (aka Zone)."""
 
+# TBA: this may end up doing I/O (schedule on demand), so shouldn't be a property
     @property
     def _sched_temperature(self, datetime=None):
         """Return the temperature we try to reach."""
@@ -1571,9 +1569,7 @@ class evoDhwEntity(evoSlaveEntity):
 
     @property
     def _get_state(self):
-        """Return the reported state of the DHW..
-
-        Is asyncio friendly."""
+        """Return the reported state of the DHW."""
 
         _state = None
 
