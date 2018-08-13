@@ -2,7 +2,7 @@
 
 The latest version of this component is at: https://github.com/zxdavb/home-assistant
 
-You can clone this fork of HA, or just mmake teh following changes to your exisiting installation of HA:
+You can clone that fork of HA, or just mmake teh following changes to your exisiting installation of HA:
  1. download this file into the corresponding folder (/components): https://raw.githubusercontent.com/zxdavb/home-assistant/dev/homeassistant/components/evohome.py 
  2. download this file into the corresponding folder (/components/climate): https://raw.githubusercontent.com/zxdavb/home-assistant/dev/homeassistant/components/climate/evohome.py
  3. Change the `REQUIREMENTS` in /components/honeywell.py to be: `'evohomeclient==0.2.7'` (instead of `0.2.5`), and 
