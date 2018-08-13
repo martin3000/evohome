@@ -6,7 +6,7 @@ You can clone that fork of HA, or just make the following changes to your exisit
  1. download this file into the corresponding folder (/components): https://raw.githubusercontent.com/zxdavb/home-assistant/dev/homeassistant/components/evohome.py 
  2. download this file into the corresponding folder (/components/climate): https://raw.githubusercontent.com/zxdavb/home-assistant/dev/homeassistant/components/climate/evohome.py
  3. Change the `REQUIREMENTS` in /components/honeywell.py to be: `'evohomeclient==0.2.7'` (instead of `0.2.5`), and 
- 4. Edit `configuration.yaml` as below.
+ 4. Edit `configuration.yaml` as below.  I recommend 60 seconds, and high precision, but YMMV with heuristics/schedules.
  
 -DAVB
 
