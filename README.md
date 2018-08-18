@@ -35,7 +35,7 @@ evohome:
 # high_precision: true  # use additional api calls for PRECISION_TENTHS rather than PRECISION_HALVES
 # use_schedules: false  # long story, but much slower initialisation & other downsides...
 # use_heuristics: false # trys to update state without waiting fro next poll of the api
-# location_id: 0        # if you have more than one location
+# location_idx: 0       # if you have more than one location
 
 ```
 
