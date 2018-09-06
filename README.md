@@ -29,12 +29,19 @@ The `configuration.yaml` is as below (note `evohome:` rather than `climate:` & `
 evohome:
   username: !secret evohome_username
   password: !secret evohome_password
-# scan_interval: 180    # how often to poll api, rounded up to nearest 60 seconds, minimum is 60
-# high_precision: true  # use additional api calls for PRECISION_TENTHS rather than PRECISION_HALVES
-# use_schedules: false  # long story, but much slower initialisation & other downsides...
-# use_heuristics: false # trys to update state without waiting fro next poll of the api
-# location_idx: 0       # if you have more than one location
 
+# These config parameters are presented with their default values:
+# scan_interval: 300     # seconds, you can probably get away with 60
+# high_precision: true   # tenths instead of halves
+# location_idx: 0        # if you have more than 1 location, use this
+
+# These config parameters are YMMV:
+# use_heuristics: false  # this is for the highly adventurous person, YMMV
+# use_schedules: false   # this is for the slightly adventurous person
+# away_temp: 15.0        # °C, if you have a non-default Away temp
+# off_temp: 5.0          # °C, if you have a non-default Heating Off temp
+
+# These are for debug logging:
 #logger:
 #  logs:
 #    custom_components.evohome: debug
