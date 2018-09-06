@@ -18,30 +18,32 @@ You can make the following changes to your exisiting installation of HA:
  1. Change the `REQUIREMENTS` in /components/honeywell.py to be: `'evohomeclient==0.2.7'` (instead of `0.2.5`) - this will not affect the functionality of that component. 
  2. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git custom_components`
  3. When required, update the git by executing: `git pull`
- 4. Edit `configuration.yaml` as below.  I recommend trying 60 seconds, and high_precision, but YMMV with heuristics/schedules.
+ 4. Edit `configuration.yaml` as below.  I recommend trying 60 seconds, and `high_precision`, but YMMV with heuristics/schedules.
  
 You will need to redo 1) only after upgrading HA to a later/earlier version.  You will need to do 2) only once.  You will need to redo 3) as often as the git is updated. You will need to do 4) only once.
 
 ## Configration file
 
-The `configuration.yaml` is as below (note `evohome:` rather than `climate:` & `- platform: honeywell`).  If required, you can add logging as below (make sure you don't end up with two `logger:` directives).
+The `configuration.yaml` is as below (note `evohome:` rather than `climate:` & `- platform: honeywell`).  
 ```
 evohome:
   username: !secret evohome_username
   password: !secret evohome_password
 
-# These config parameters are presented with their default values:
+# These config parameters are presented with their default values...
 # scan_interval: 300     # seconds, you can probably get away with 60
 # high_precision: true   # tenths instead of halves
 # location_idx: 0        # if you have more than 1 location, use this
 
-# These config parameters are YMMV:
+# These config parameters are YMMV...
 # use_heuristics: false  # this is for the highly adventurous person, YMMV
 # use_schedules: false   # this is for the slightly adventurous person
 # away_temp: 15.0        # °C, if you have a non-default Away temp
 # off_temp: 5.0          # °C, if you have a non-default Heating Off temp
-
-# These are for debug logging:
+```
+If required, you can add logging as below (make sure you don't end up with two `logger:` directives).
+```
+# These are for debug logging...
 #logger:
 #  logs:
 #    custom_components.evohome: debug
