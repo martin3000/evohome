@@ -17,7 +17,7 @@ NB: this is _for EU-based systems only_, it will not work with US-based systems 
 You can make the following changes to your exisiting installation of HA:
  1. Change the `REQUIREMENTS` in /components/honeywell.py to be: `'evohomeclient==0.2.7'` (instead of `0.2.5`) - this will not affect the functionality of that component. 
  2. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git custom_components`
- 3. Update the git by executing: `git pull`
+ 3. When required, update the git by executing: `git pull`
  4. Edit `configuration.yaml` as below.  I recommend trying 60 seconds, and high_precision, but YMMV with heuristics/schedules.
  
 You will need to redo 1) only after upgrading HA to a later/earlier version.  You will need to do 2) only once.  You will need to redo 3) as often as the git is updated. You will need to do 4) only once.
