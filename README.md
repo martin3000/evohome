@@ -24,7 +24,7 @@ You will need to redo 1) only after upgrading HA to a later/earlier version.  Yo
 
 ## Configration file
 
-The `configuration.yaml` is as below (note `evohome:` rather than `climate:` & `- platform: honeywell`)...
+The `configuration.yaml` is as below (note `evohome:` rather than `climate:` & `- platform: honeywell`).  If required, you can add logging as below (make sure you don't end up with two `logger:` directives).
 ```
 evohome:
   username: !secret evohome_username
@@ -35,6 +35,11 @@ evohome:
 # use_heuristics: false # trys to update state without waiting fro next poll of the api
 # location_idx: 0       # if you have more than one location
 
+#logger:
+#  logs:
+#    custom_components.evohome: debug
+#    custom_components.climate.evohome: debug
+#    evohomeclient2: warn
 ```
 
 ## Improvements over the existing Honeywell component
