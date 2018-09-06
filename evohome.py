@@ -79,8 +79,8 @@ from homeassistant.const import (
 
 # These are HTTP codes commonly seen with this component
 #   HTTP_BAD_REQUEST = 400          # usually, bad user credentials
-    HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
-    HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
+HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
+HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
 
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
