@@ -75,14 +75,12 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 
     HTTP_BAD_REQUEST,
-    HTTP_TOO_MANY_REQUESTS,
-    HTTP_SERVICE_UNAVAILABLE,
 )
 
 # These are HTTP codes commonly seen with this component
 #   HTTP_BAD_REQUEST = 400          # usually, bad user credentials
-#   HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
-#   HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
+HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
+HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
 
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
@@ -652,11 +650,19 @@ class EvoEntity(Entity):                                                        
         if self._type & EVO_DHW:
             # Zones & DHW controllers report a current temperature
             # they have different precision, & a zone's precision may change
-            data[ATTR_TEMPERATURE] = show_temp(
+            # lowest possible target_temp
+            data[ATTR_MIN_TEMP] = show_temp(
                 self.hass,
-                self.target_temperature,
+                self.min_temp,
                 self.temperature_unit,
-                PRECISION_WHOLE
+                self.precision
+            )
+            # highest possible target_temp
+            data[ATTR_MAX_TEMP] = show_temp(
+                self.hass,
+                self.max_temp,
+                self.temperature_unit,
+                self.precision
             )
 
         # Heating zones also have a target temperature (and a setpoint)
@@ -960,10 +966,6 @@ class EvoController(EvoEntity):
                 for zone in new_dict_list:
                     del zone['name']
                     zone['apiV1Status'] = {}
-
-                    # is 0 for dhw when state() == off?
-                    zone['apiV1Status']['setpoint'] = zone.pop('setpoint')
-
                     # is 128 is used for 'unavailable' temps?
                     temp = zone.pop('temp')
                     if temp != 128:
@@ -976,6 +978,7 @@ class EvoController(EvoEntity):
                     dhw_v1 = new_dict_list.pop(0)
 
                     dhw_v1['dhwId'] = str(dhw_v1.pop('id'))
+                    del dhw_v1['setpoint']
                     del dhw_v1['thermostat']
 
                     dhw_v2 = domain_data['status']['dhw']
@@ -984,6 +987,7 @@ class EvoController(EvoEntity):
     # now, prepare the v1 zones to merge into the v2 zones
                 for zone in new_dict_list:
                     zone['zoneId'] = str(zone.pop('id'))
+                    zone['apiV1Status']['setpoint'] = zone.pop('setpoint')
                     del zone['thermostat']
 
                 org_dict_list = domain_data['status']['zones']
@@ -1021,6 +1025,11 @@ class EvoController(EvoEntity):
                         ec1_api.user_data
                     )
     #               raise  # usually, no raise for TypeError
+
+        _LOGGER.debug(
+            "_update_state_data(): domain_data['status'] = %s",
+            domain_data['status']
+        )
 
     def update(self):
         """Get the latest state data of the installation.
@@ -1237,7 +1246,7 @@ class EvoSlaveEntity(EvoEntity):
         elif self._type & EVO_DHW:
             precision = PRECISION_WHOLE
 
-        _LOGGER.debug("precision(%s) = %s", self._id, precision)
+#       _LOGGER.debug("precision(%s) = %s", self._id, precision)
         return precision
 
     @property
@@ -1638,7 +1647,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         temperature, which would be a function of operating mode (both
         controller and zone) and, for TRVs, the OpenWindowMode feature.
 
-        Boilers do not have setpoints; they are only on or off.  Their 
+        Boilers do not have setpoints; they are only on or off.  Their
         (scheduled) setpoint is the same as their target temperature.
         """
         # Zones have: {'DhwState': 'On',     'TimeOfDay': '17:30:00'}
@@ -1741,18 +1750,6 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
 
 class EvoBoiler(EvoSlaveEntity):
     """Base for a Honeywell evohome DHW controller (aka boiler)."""
-
-    @property
-    def target_temperature(self):
-        """Return the current setpoint of a boiler, if known."""
-        temp = None
-        if self._params[CONF_HIGH_PRECISION]:
-            temp = self._status['apiV1Status']['setpoint']
-
-       if temp == 0:
-            temp = None
-        _LOGGER.debug("target_temperature(%s) = %s", self._id, temp)
-        return temp
 
     def _set_dhw_state(self, state=None, mode=None, until=None):
         """Set the new state of a DHW controller.
