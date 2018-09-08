@@ -1749,10 +1749,8 @@ class EvoBoiler(EvoSlaveEntity):
         if self._params[CONF_HIGH_PRECISION]:
             temp = self._status['apiV1Status']['setpoint']
 
-        if temp is None:
-            temp = self.min_temp
-        elif temp == 0:
-            temp = self.min_temp
+       if temp == 0:
+            temp = None
         _LOGGER.debug("target_temperature(%s) = %s", self._id, temp)
         return temp
 
