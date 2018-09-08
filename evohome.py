@@ -1367,23 +1367,24 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         """
 # When Zone is 'Off' & TCS == Away: Zone = TempOver/5C
 # When Zone is 'Follow' & TCS = Away: Zone = Follow/15C
+        domain_data = self.hass.data[DATA_EVOHOME]
+
+        tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
         zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
 
-        state = zone_op_mode
-
-        # Optionally, use heuristics to override reported state (mode)
-        if self._params[CONF_USE_HEURISTICS]:
-            domain_data = self.hass.data[DATA_EVOHOME]
-
-            tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
-            zone_target_temp = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
-
+        if zone_op_mode == EVO_FOLLOW:
             if tcs_op_mode == EVO_RESET:
                 state = EVO_AUTO
             elif tcs_op_mode == EVO_HEATOFF:
                 state = EVO_FROSTMODE
-            elif zone_op_mode == EVO_FOLLOW:
+            else:
                 state = tcs_op_mode
+        else:
+            state = zone_op_mode
+
+        # Optionally, use heuristics to override reported state (mode)
+        if self._params[CONF_USE_HEURISTICS]:
+            zone_target_temp = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
 
             if zone_target_temp == self.min_temp:
                 if zone_op_mode == EVO_TEMPOVER:
