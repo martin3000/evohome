@@ -75,10 +75,15 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 
     HTTP_BAD_REQUEST,
+#   HTTP_TOO_MANY_REQUESTS,
+#   HTTP_SERVICE_UNAVAILABLE,
 )
 
 # These are HTTP codes commonly seen with this component
 #   HTTP_BAD_REQUEST = 400          # usually, bad user credentials
+#   HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
+#   HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
+
 HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
 HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
 
@@ -912,7 +917,7 @@ class EvoController(EvoEntity):
             # only update the timers if the api call was successful
             domain_data['timers']['statusUpdated'] = datetime.now()
 
-#       _LOGGER.debug("domain_data['status'] = %s", domain_data['status'])
+        _LOGGER.debug("domain_data['status'] = %s", domain_data['status'])
 
     # 2. AFTER obtaining state data, do we need to increase precision of temps?
         if domain_data['params'][CONF_HIGH_PRECISION] and \
@@ -936,31 +941,59 @@ class EvoController(EvoEntity):
                     "client.temperatures()..."
                 )
                 # this is a a generator, so use list()
+                # i think: DHW first (if any), then zones ordered by name
                 new_dict_list = list(ec1_api.temperatures(force_refresh=True))
+
+                _LOGGER.debug(
+                    "_update_state_data(): new_dict_list = %s",
+                    new_dict_list
+                )
+    # first handle the DHW, if any
+                if new_dict_list[0]['thermostat'] == 'DOMESTIC_HOT_WATER':
+                    dhw_v1 = new_dict_list.pop(0)
+                    
+                    dhw_v1['dhwId'] = str(dhw_v1.pop('id'))
+                    dhw_v1['setpointVer1'] = str(dhw_v1.pop('setpoint'))
+                    del dhw_v1['thermostat']
+                    del dhw_v1['name']
+                    temp = dhw_v1.pop('temp')
+                    if temp != 128:  # is 128 is used for 'unavailable' temps?
+                        dhw_v1['temperatureVer1'] = temp
+                    else:
+                        dhw_v1['temperatureVer1'] = None
+
+                    dhw_v2 = domain_data['status']['dhw']
+                    dhw_v2.update(dhw_v1)  # more like a merge
 
     # now, prepare the v1 temps to merge with v2 status
                 for zone in new_dict_list:
                     zone['zoneId'] = str(zone.pop('id'))
+                    zone['setpointVer1'] = str(zone.pop('setpoint'))
                     del zone['thermostat']
-    #               del zone['setpoint']
                     del zone['name']
                     temp = zone.pop('temp')
                     if temp != 128:  # is 128 is used for 'unavailable' temps?
-                        zone['highPrecisionTemp'] = temp
+                        zone['temperatureVer1'] = temp
                     else:
-                        zone['highPrecisionTemp'] = None
+                        zone['temperatureVer1'] = None
 
+    # now, prepare the v1 temps to merge with v2 status
                 org_dict_list = domain_data['status']['zones']
 
+                _LOGGER.debug(
+                    "_update_state_data(): org_dict_list = %s",
+                    org_dict_list
+                )
     # this was the old way of doing it...
     #           for temp in new_dict_list:
     #               for zone in org_dict_list:
     #                   if str(temp['id']) == zone['zoneId']:
-    #                       zone['highPrecisionTemp'] = temp['temp']
+    #                       zone['temperatureVer1'] = temp['temp']
     #                       break
     # I think the old way was better! e.g. didn't need to prepare temps + sort
 
-    # this is the new way of doing it (more python-esque) - dont use sorted()!
+    # this is the new way of doing it (more python-esque)
+    #  - dont use sorted(), it will create a new list!
                 new_dict_list.sort(key=lambda x: x['zoneId'])
                 org_dict_list.sort(key=lambda x: x['zoneId'])
                 # v2 and v1 lists _should_ now be zip'ble
@@ -1170,8 +1203,8 @@ class EvoSlaveEntity(EvoEntity):
         # evoBoiler(Entity) *also* needs uses unit_of_measurement
 
         # TBA: this needs work - what if v1 temps failed, or ==128
-        if 'highPrecisionTemp' in self._status:
-            curr_temp = self._status['highPrecisionTemp']
+        if 'temperatureVer1' in self._status:
+            curr_temp = self._status['temperatureVer1']
         elif self._status['temperatureStatus']['isAvailable']:
             curr_temp = self._status['temperatureStatus']['temperature']
         else:
@@ -1184,7 +1217,7 @@ class EvoSlaveEntity(EvoEntity):
                 self._id
             )
 
-#       _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)
+        _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)
         return curr_temp
 
     @property
@@ -1196,14 +1229,14 @@ class EvoSlaveEntity(EvoEntity):
     @property
     def precision(self):
         """Return the temperature precision to use in the frontend UI."""
-        if self._type & EVO_DHW:  # Honeywell has (e.g.) 62C, not 62.0C
-            precision = PRECISION_WHOLE
-        elif self._params[CONF_HIGH_PRECISION]:
-            precision = PRECISION_TENTHS
-        else:
+        if self._params[CONF_HIGH_PRECISION]:
+            precision = PRECISION_TENTHS  # and is actually 0.01 for zones!
+        elif self._type & EVO_ZONE:
             precision = PRECISION_HALVES
+        elif self._type & EVO_DHW:
+            precision = PRECISION_WHOLE
 
-#       _LOGGER.debug("precision(%s) = %s", self._id, precision)
+        _LOGGER.debug("precision(%s) = %s", self._id, precision)
         return precision
 
     def update(self):
