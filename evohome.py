@@ -75,17 +75,14 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 
     HTTP_BAD_REQUEST,
-#   HTTP_TOO_MANY_REQUESTS,
-#   HTTP_SERVICE_UNAVAILABLE,
+    HTTP_TOO_MANY_REQUESTS,
+    HTTP_SERVICE_UNAVAILABLE,
 )
 
 # These are HTTP codes commonly seen with this component
 #   HTTP_BAD_REQUEST = 400          # usually, bad user credentials
 #   HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
 #   HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
-
-HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
-HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
 
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
@@ -652,6 +649,16 @@ class EvoEntity(Entity):                                                        
             # Controllers do not have a temperature at all
             data = {}
 
+        if self._type & EVO_DHW:
+            # Zones & DHW controllers report a current temperature
+            # they have different precision, & a zone's precision may change
+            data[ATTR_TEMPERATURE] = show_temp(
+                self.hass,
+                self.target_temperature,
+                self.temperature_unit,
+                PRECISION_WHOLE
+            )
+
         # Heating zones also have a target temperature (and a setpoint)
         if self._supported_features & SUPPORT_TARGET_TEMPERATURE:
             data[ATTR_TEMPERATURE] = show_temp(
@@ -948,51 +955,45 @@ class EvoController(EvoEntity):
                     "_update_state_data(): new_dict_list = %s",
                     new_dict_list
                 )
-    # first handle the DHW, if any
+
+    # start prep of the data
+                for zone in new_dict_list:
+                    del zone['name']
+                    zone['apiV1Status'] = {}
+
+                    # is 0 for dhw when state() == off?
+                    zone['apiV1Status']['setpoint'] = zone.pop('setpoint')
+
+                    # is 128 is used for 'unavailable' temps?
+                    temp = zone.pop('temp')
+                    if temp != 128:
+                        zone['apiV1Status']['temp'] = temp
+                    else:
+                        zone['apiV1Status']['temp'] = None
+
+    # first handle the DHW, if any (done this way for readability)
                 if new_dict_list[0]['thermostat'] == 'DOMESTIC_HOT_WATER':
                     dhw_v1 = new_dict_list.pop(0)
-                    
+
                     dhw_v1['dhwId'] = str(dhw_v1.pop('id'))
-                    dhw_v1['setpointVer1'] = str(dhw_v1.pop('setpoint'))
                     del dhw_v1['thermostat']
-                    del dhw_v1['name']
-                    temp = dhw_v1.pop('temp')
-                    if temp != 128:  # is 128 is used for 'unavailable' temps?
-                        dhw_v1['temperatureVer1'] = temp
-                    else:
-                        dhw_v1['temperatureVer1'] = None
 
                     dhw_v2 = domain_data['status']['dhw']
                     dhw_v2.update(dhw_v1)  # more like a merge
 
-    # now, prepare the v1 temps to merge with v2 status
+    # now, prepare the v1 zones to merge into the v2 zones
                 for zone in new_dict_list:
                     zone['zoneId'] = str(zone.pop('id'))
-                    zone['setpointVer1'] = str(zone.pop('setpoint'))
                     del zone['thermostat']
-                    del zone['name']
-                    temp = zone.pop('temp')
-                    if temp != 128:  # is 128 is used for 'unavailable' temps?
-                        zone['temperatureVer1'] = temp
-                    else:
-                        zone['temperatureVer1'] = None
 
-    # now, prepare the v1 temps to merge with v2 status
                 org_dict_list = domain_data['status']['zones']
 
                 _LOGGER.debug(
                     "_update_state_data(): org_dict_list = %s",
                     org_dict_list
                 )
-    # this was the old way of doing it...
-    #           for temp in new_dict_list:
-    #               for zone in org_dict_list:
-    #                   if str(temp['id']) == zone['zoneId']:
-    #                       zone['temperatureVer1'] = temp['temp']
-    #                       break
-    # I think the old way was better! e.g. didn't need to prepare temps + sort
 
-    # this is the new way of doing it (more python-esque)
+    # finally, merge the v1 zones into the v2 zones
     #  - dont use sorted(), it will create a new list!
                 new_dict_list.sort(key=lambda x: x['zoneId'])
                 org_dict_list.sort(key=lambda x: x['zoneId'])
@@ -1203,8 +1204,8 @@ class EvoSlaveEntity(EvoEntity):
         # evoBoiler(Entity) *also* needs uses unit_of_measurement
 
         # TBA: this needs work - what if v1 temps failed, or ==128
-        if 'temperatureVer1' in self._status:
-            curr_temp = self._status['temperatureVer1']
+        if 'apiV1Status' in self._status:
+            curr_temp = self._status['apiV1Status']['temp']
         elif self._status['temperatureStatus']['isAvailable']:
             curr_temp = self._status['temperatureStatus']['temperature']
         else:
@@ -1238,6 +1239,34 @@ class EvoSlaveEntity(EvoEntity):
 
         _LOGGER.debug("precision(%s) = %s", self._id, precision)
         return precision
+
+    @property
+    def min_temp(self):
+        """Return the minimum target temp (setpoint) of a zone.
+
+        Setpoints are 5-35C by default, but can be further limited.  Only
+        applies to heating zones, not DHW controllers (boilers).
+        """
+        if self._type & EVO_ZONE:
+            temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
+        elif self._type & EVO_DHW:
+            temp = 30
+#       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
+        return temp
+
+    @property
+    def max_temp(self):
+        """Return the maximum target temp (setpoint) of a zone.
+
+        Setpoints are 5-35C by default, but can be further limited.  Only
+        applies to heating zones, not DHW controllers (boilers).
+        """
+        if self._type & EVO_ZONE:
+            temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
+        elif self._type & EVO_DHW:
+            temp = 85
+#       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
+        return temp
 
     def update(self):
         """Get the latest state data of the Heating/DHW zone.
@@ -1609,7 +1638,8 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         temperature, which would be a function of operating mode (both
         controller and zone) and, for TRVs, the OpenWindowMode feature.
 
-        Boilers do not have setpoints; they are only on or off.
+        Boilers do not have setpoints; they are only on or off.  Their 
+        (scheduled) setpoint is the same as their target temperature.
         """
         # Zones have: {'DhwState': 'On',     'TimeOfDay': '17:30:00'}
         # DHW has:    {'heatSetpoint': 17.3, 'TimeOfDay': '17:30:00'}
@@ -1665,7 +1695,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
 
             elif tcs_opmode == EVO_AWAY:
                 # default 'Away' temp is 15C, but can be set otherwise
-                # it seems to set to CONF_AWAY_TEMP even if setpoint is lower
+                # TBC: set to CONF_AWAY_TEMP even if set setpoint is lower
                 temp = self._params[CONF_AWAY_TEMP]
 
             elif tcs_opmode == EVO_HEATOFF:
@@ -1708,31 +1738,23 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
 #       _LOGGER.debug("target_temperature_step(%s) = %s", self._id, step)
         return step
 
-    @property
-    def min_temp(self):
-        """Return the minimum target temp (setpoint) of a zone.
-
-        Setpoints are 5-35C by default, but can be further limited.  Only
-        applies to heating zones, not DHW controllers (boilers).
-        """
-        temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
-#       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
-        return temp
-
-    @property
-    def max_temp(self):
-        """Return the maximum target temp (setpoint) of a zone.
-
-        Setpoints are 5-35C by default, but can be further limited.  Only
-        applies to heating zones, not DHW controllers (boilers).
-        """
-        temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
-#       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
-        return temp
-
 
 class EvoBoiler(EvoSlaveEntity):
     """Base for a Honeywell evohome DHW controller (aka boiler)."""
+
+    @property
+    def target_temperature(self):
+        """Return the current setpoint of a boiler, if known."""
+        temp = None
+        if self._params[CONF_HIGH_PRECISION]:
+            temp = self._status['apiV1Status']['setpoint']
+
+        if temp is None:
+            temp = self.min_temp
+        elif temp == 0:
+            temp = self.min_temp
+        _LOGGER.debug("target_temperature(%s) = %s", self._id, temp)
+        return temp
 
     def _set_dhw_state(self, state=None, mode=None, until=None):
         """Set the new state of a DHW controller.
