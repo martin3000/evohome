@@ -540,7 +540,7 @@ class EvoEntity(Entity):                                                        
         However, evohome entities can become unavailable for other reasons.
         """
         no_recent_updates = self._timers['statusUpdated'] < datetime.now() - \
-            timedelta(seconds=self._params[CONF_SCAN_INTERVAL] * 2.1)
+            timedelta(seconds=self._params[CONF_SCAN_INTERVAL] * 3.1)
 
         if no_recent_updates:
             # unavailable because no successful update()s (but why?)
@@ -556,23 +556,25 @@ class EvoEntity(Entity):                                                        
             # (un)available because (web site via) client api says so
             self._available = \
                 bool(self._status['temperatureStatus']['isAvailable'])
-            debug_code = '0x03'
+            debug_code = '0x03'  # only used if above is False
 
         else:  # is available
             self._available = True
 
         if not self._available and \
                 self._timers['statusUpdated'] != datetime.min:
-            # this isn't the first (un)available (i.e. is after 1st update())
+            # this isn't the first (un)available (i.e. after STARTUP)
             _LOGGER.warning(
-                "available(%s) = %s, debug code = %s, self._status = %s",
+                "available(%s) = %s (code = %s), "
+                "self._status = %s, self._timers = %s",
                 self._id,
                 self._available,
                 debug_code,
-                self._status
+                self._status,
+                self._timers
             )
 
-#       _LOGGER.debug("available(%s) = %s", self._id, self._available)
+        _LOGGER.debug("available(%s) = %s", self._id, self._available)
         return self._available
 
     @property
@@ -1372,6 +1374,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
         zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
 
+        # If possible, use inheritance to override reported state
         if zone_op_mode == EVO_FOLLOW:
             if tcs_op_mode == EVO_RESET:
                 state = EVO_AUTO
@@ -1380,7 +1383,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
             else:
                 state = tcs_op_mode
         else:
-            state = zone_op_mode
+            state = zone_op_mode  # the reported state
 
         # Optionally, use heuristics to override reported state (mode)
         if self._params[CONF_USE_HEURISTICS]:
@@ -1393,7 +1396,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
                 elif zone_op_mode == EVO_PERMOVER:
                     state = EVO_FROSTMODE
 
-            if state != self._status[SETPOINT_STATE]['setpointMode']:
+            if state != zone_op_mode and zone_op_mode != EVO_FOLLOW:
                 _LOGGER.warning(
                     "state(%s) = %s, via heuristics (via api = %s)",
                     self._id,
@@ -1820,6 +1823,11 @@ class EvoBoiler(EvoSlaveEntity):
           - Away, Off regardless of scheduled state
         """
         domain_data = self.hass.data[DATA_EVOHOME]
+
+        tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
+        dhw_op_mode = self._status['stateStatus']['mode']
+
+        # Determine the reported state
         dhw_state = self._status['stateStatus']['state']
 
         if dhw_state == DHW_STATES[STATE_ON]:
@@ -1829,25 +1837,26 @@ class EvoBoiler(EvoSlaveEntity):
         else:
             state = STATE_UNKNOWN
 
-        # Optionally, use heuristics to override reported state (mode)
-        if self._params[CONF_USE_HEURISTICS]:
-            tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
+        # If possible, use inheritance to override reported state
+        if dhw_op_mode == EVO_FOLLOW:
             if tcs_op_mode == EVO_AWAY:
-                state = EVO_AWAY
+                state = EVO_AWAY  # a special form of 'Off'
 
-            if DHW_STATES[state] != self._status['stateStatus']['state']:
+        # Perform a sanity check & warn if it fails
+        if state == EVO_AWAY:
+            if dhw_state != DHW_STATES[STATE_OFF]:
                 _LOGGER.warning(
-                    "state(%s) = %s, via heuristics (via api = %s)",
+                    "state(%s) = %s, via inheritance (via api = %s)",
                     self._id,
                     state,
-                    self._status['stateStatus']['state']
+                    dhw_state
                 )
             else:
                 _LOGGER.debug(
-                    "state(%s) = %s, via heuristics (via api = %s)",
+                    "state(%s) = %s, via inheritance (via api = %s)",
                     self._id,
                     state,
-                    self._status['stateStatus']['state']
+                    dhw_state
                 )
         else:
             _LOGGER.debug("state(%s) = %s", self._id, state)
