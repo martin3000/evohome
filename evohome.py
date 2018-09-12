@@ -227,6 +227,8 @@ def setup(hass, config):
         logging.getLogger().setLevel(log_level)
 
     except requests.RequestException as err:
+#   except requests.exceptions.ConnectionError as err:
+#   except requests.exceptions.HTTPError as err:
         if str(HTTP_BAD_REQUEST) in str(err):
             # this happens when bad user credentials are supplied
             _LOGGER.error(
@@ -441,11 +443,12 @@ class EvoEntity(Entity):                                                        
             self._connect
         )  # for: def async_dispatcher_connect(signal, target)
 
-    def _handle_requests_exceptions(self, err_type, err):
+    def _handle_exception(self, err_hint, err_text):
 
         domain_data = self.hass.data[DATA_EVOHOME]
+        do_backoff = False
 
-# evohomeclient1 (<=0.2.7) does not have a requests exceptions handler:
+# 1/3: evohomeclient1 (<=0.2.7) does not have a requests exceptions handler:
 #     File ".../evohomeclient/__init__.py", line 33, in _populate_full_data
 #       userId = self.user_data['userInfo']['userID']
 #   TypeError: list indices must be integers or slices, not str
@@ -456,56 +459,61 @@ class EvoEntity(Entity):                                                        
 #   'message': 'Request count limitation exceeded, please try again later.'
 # }
 
-        if err_type == "TooManyRequests":  # not actually from requests library
+        if err_hint == "TooManyRequests":  # not actually from requests library
             # v1 api limit has been exceeded
-            old_scan_interval = domain_data['params'][CONF_SCAN_INTERVAL]
-            new_scan_interval = min(old_scan_interval * 2, 300)
-            domain_data['params'][CONF_SCAN_INTERVAL] = new_scan_interval
+            can_handle_this_exception = True
+            do_backoff = True
+            debug_code = "v1"
 
+
+# 2/3: evohomeclient2 now (>=0.2.7) exposes requests exceptions, e.g.:
+# - "Connection reset by peer"
+# - "Max retries exceeded with url", caused by "Connection timed out"
+        elif err_hint == "ConnectionError":  # seems common with evohome
+            can_handle_this_exception = False
+
+
+# 3/3: evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
+# - "400 Client Error: Bad Request for url" (e.g. Bad credentials)
+# - "429 Client Error: Too Many Requests for url" (api usuage limit exceeded)
+# - "503 Client Error: Service Unavailable for url" (e.g. website down)
+        elif err_hint == "HTTPError":
+            if str(HTTP_TOO_MANY_REQUESTS) in err_text:
+                # v2 api limit has been exceeded
+                do_backoff = True
+                debug_code = "v2"
+
+            elif str(HTTP_SERVICE_UNAVAILABLE) in err_text:
+                # this appears to be common with Honeywell servers
+                can_handle_this_exception = False
+
+        else:
+            can_handle_this_exception = False
+
+
+# Do we need to back off from current scan_interval?
+        if do_backoff is True: # api rate limit has been exceeded
+            # increase the scan_interval
+            old_scan_interval = self._params[CONF_SCAN_INTERVAL]
+            new_scan_interval = min(old_scan_interval * 2, 300)
+            self._params[CONF_SCAN_INTERVAL] = new_scan_interval
+
+            # warn the user
             _LOGGER.warning(
-                "v1 API rate limit has been exceeded, suspending polling "
-                "for %s seconds, & increasing '%s' from %s to %s seconds.",
+                "API rate limit has been exceeded, suspending polling for %s "
+                "seconds, & increasing '%s' from %s to %s seconds.",
                 new_scan_interval * 3,
                 CONF_SCAN_INTERVAL,
                 old_scan_interval,
                 new_scan_interval
             )
 
-            domain_data['timers']['statusUpdated'] = datetime.now() + \
+            # wait for a short while - 3 scan_intervals
+            self._timers['statusUpdated'] = datetime.now() + \
                 timedelta(seconds=new_scan_interval * 3)
 
-# evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
-# - "Connection reset by peer"
-# - "Max retries exceeded with url", caused by "Connection timed out"
-#       elif err_type == "ConnectionError":  # seems common with evohome
-#           pass
 
-# evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
-# - "400 Client Error: Bad Request for url" (e.g. Bad credentials)
-# - "429 Client Error: Too Many Requests for url" (api usuage limit exceeded)
-# - "503 Client Error: Service Unavailable for url" (e.g. website down)
-        elif err_type == "HTTPError":
-            if str(HTTP_TOO_MANY_REQUESTS) in str(err):
-                # v2 api limit has been exceeded
-                old_scan_interval = domain_data['params'][CONF_SCAN_INTERVAL]
-                new_scan_interval = max(old_scan_interval * 2, 300)
-                domain_data['params'][CONF_SCAN_INTERVAL] = new_scan_interval
-
-                _LOGGER.warning(
-                    "v2 API rate limit has been exceeded, suspending polling "
-                    "for %s seconds, & increasing '%s' from %s to %s seconds.",
-                    new_scan_interval * 3,
-                    CONF_SCAN_INTERVAL,
-                    old_scan_interval,
-                    new_scan_interval
-                )
-
-                domain_data['timers']['statusUpdated'] = datetime.now() + \
-                    timedelta(seconds=new_scan_interval * 3)
-
-            elif str(HTTP_SERVICE_UNAVAILABLE) in str(err):
-                # this appears to be common with Honeywell servers
-                pass
+            return can_handle_this_exception
 
     @callback
     def _connect(self, packet):
@@ -565,7 +573,7 @@ class EvoEntity(Entity):                                                        
                 self._timers['statusUpdated'] != datetime.min:
             # this isn't the first (un)available (i.e. after STARTUP)
             _LOGGER.warning(
-                "available(%s) = %s (code = %s), "
+                "available(%s) = %s (debug code %s), "
                 "self._status = %s, self._timers = %s",
                 self._id,
                 self._available,
@@ -813,7 +821,8 @@ class EvoController(EvoEntity):
             try:
                 self._obj._set_status(operation_mode)                           # noqa: E501; pylint: disable=protected-access
             except requests.exceptions.HTTPError as err:
-                self._handle_requests_exceptions("HTTPError", err)
+                if not self._handle_exception("HTTPError", str(err)):
+                    raise
 
             if self._params[CONF_USE_HEURISTICS]:
                 _LOGGER.debug(
@@ -909,7 +918,7 @@ class EvoController(EvoEntity):
 
     def _update_state_data(self, domain_data):
         client = domain_data['client']
-        loc_idx = domain_data['params'][CONF_LOCATION_IDX]
+        loc_idx = self._params[CONF_LOCATION_IDX]
 
     # 1. Obtain latest state data (e.g. temps)...
         _LOGGER.debug(
@@ -921,29 +930,30 @@ class EvoController(EvoEntity):
             domain_data['status'].update(  # or: domain_data['status'] =
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
 
-#       except requests.RequestException as err:
-#
-#       except requests.exceptions.ConnectionError as err:
-#           self._handle_requests_exceptions("ConnectionError", err)
         except requests.exceptions.HTTPError as err:
-            self._handle_requests_exceptions("HTTPError", err)
+            if not self._handle_exception("HTTPError", str(err)):
+                raise
 
         else:
             # only update the timers if the api call was successful
-            domain_data['timers']['statusUpdated'] = datetime.now()
+            self._timers['statusUpdated'] = datetime.now()
 
-        _LOGGER.debug("domain_data['status'] = %s", domain_data['status'])
+        _LOGGER.debug(
+            "_update_state_data(): domain_data['status'] = %s",
+            domain_data['status']
+        )
+        _LOGGER.warn("self._timers = %s, domain_data['timers'] = %s", self._timers, domain_data['timers'])
 
     # 2. AFTER obtaining state data, do we need to increase precision of temps?
-        if domain_data['params'][CONF_HIGH_PRECISION] and \
+        if self._params[CONF_HIGH_PRECISION] and \
                 len(client.locations) > 1:
             _LOGGER.warning(
                 "Unable to increase temperature precision via the v1 api; "
                 "there is more than one Location/TCS. Disabling this feature."
             )
-            domain_data['params'][CONF_HIGH_PRECISION] = False
+            self._params[CONF_HIGH_PRECISION] = False
 
-        elif domain_data['params'][CONF_HIGH_PRECISION]:
+        elif self._params[CONF_HIGH_PRECISION]:
             _LOGGER.debug(
                 "Trying to increase temperature precision via the v1 api..."
             )
@@ -1012,21 +1022,16 @@ class EvoController(EvoEntity):
                     "Failed to obtain higher-precision temperatures "
                     "via the v1 api.  Continuing with v2 temps for now."
                 )
-
-                if isinstance(ec1_api.user_data, list):
-                    if 'code' in ec1_api.user_data[0]:
-                        if ec1_api.user_data[0]['code'] == 'TooManyRequests':
-                            self._handle_requests_exceptions(
-                                ec1_api.user_data[0]['code'],
-                                ec1_api.user_data[0]['message']
-                            )
-
-                elif _LOGGER.isEnabledFor(logging.DEBUG):
-                    _LOGGER.debug(
-                        "This may help: ec1_api.user_data = %s",
-                        ec1_api.user_data
-                    )
-    #               raise  # usually, no raise for TypeError
+                # Has api rate limit been exceeded?  If so, back off...
+                response = ec1_api.user_data
+                if isinstance(response, list):
+                    if 'code' in response[0]:
+                        err_hint = response[0]['code']
+                        err_text = response[0]['message']
+                        self._handle_exception(err_hint, err_text) 
+                # Or what else could it be?
+                _LOGGER.debug("TypeError: ec1_api.user_data = %s", response)
+                #   raise  # no raise for TypeError
 
         _LOGGER.debug(
             "_update_state_data(): domain_data['status'] = %s",
@@ -1048,7 +1053,7 @@ class EvoController(EvoEntity):
         # Wait a minimum (scan_interval/60) mins (rounded up) between updates
         timeout = datetime.now() + timedelta(seconds=55)
         expired = timeout > self._timers['statusUpdated'] + \
-            timedelta(seconds=domain_data['params'][CONF_SCAN_INTERVAL])
+            timedelta(seconds=self._params[CONF_SCAN_INTERVAL])
 
         if not expired:  # timer not expired, so exit
             return True
@@ -1339,7 +1344,8 @@ class EvoSlaveEntity(EvoEntity):
                 try:
                     self._schedule['schedule'] = self._obj.schedule()
                 except requests.exceptions.HTTPError as err:
-                    self._handle_requests_exceptions("HTTPError", err)
+                    if not self._handle_exception("HTTPError", str(err)):
+                        raise
                 else:
                     # only update the timers if the api call was successful
                     self._schedule['updated'] = datetime.now()
@@ -1466,7 +1472,8 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
             self._obj.set_temperature(temperature)
 
         except requests.exceptions.HTTPError as err:
-            self._handle_requests_exceptions("HTTPError", err)
+            if not self._handle_exception("HTTPError", str(err)):
+                raise
 
         return None
 
@@ -1578,7 +1585,8 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
                 self._obj.cancel_temp_override(self._obj)
 
             except requests.exceptions.HTTPError as err:
-                self._handle_requests_exceptions("HTTPError", err)
+                if not self._handle_exception("HTTPError", str(err)):
+                    raise
 
         else:
             if temperature is None:
@@ -1678,19 +1686,19 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         if self._params[CONF_USE_HEURISTICS] and \
                 self._params[CONF_USE_SCHEDULES]:
 
-            tcs_opmode = domain_data['status']['systemModeStatus']['mode']
-            zone_opmode = self._status[SETPOINT_STATE]['setpointMode']
+            tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
+            zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
 
-            if tcs_opmode == EVO_CUSTOM:
+            if tcs_op_mode == EVO_CUSTOM:
                 pass  # target temps unknowable, must await update()
 
-            elif tcs_opmode in (EVO_AUTO, EVO_RESET) and \
-                    zone_opmode == EVO_FOLLOW:
+            elif tcs_op_mode in (EVO_AUTO, EVO_RESET) and \
+                    zone_op_mode == EVO_FOLLOW:
                 # target temp is set according to schedule
                 temp = self.setpoint
 
-            elif tcs_opmode == EVO_AUTOECO and \
-                    zone_opmode == EVO_FOLLOW:
+            elif tcs_op_mode == EVO_AUTOECO and \
+                    zone_op_mode == EVO_FOLLOW:
                 # target temp is relative to the scheduled setpoints, with
                 #  - setpoint => 16.5, target temp = (setpoint - 3)
                 #  - setpoint <= 16.0, target temp = (setpoint - 0)!
@@ -1698,20 +1706,20 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
                 if temp > 16.0:
                     temp = temp - 3
 
-            elif tcs_opmode == EVO_DAYOFF and \
-                    zone_opmode == EVO_FOLLOW:
+            elif tcs_op_mode == EVO_DAYOFF and \
+                    zone_op_mode == EVO_FOLLOW:
                 # set target temp according to schedule, but for Saturday
                 this_time_saturday = datetime.now() + timedelta(
                     days=6 - int(datetime.now().strftime('%w')))
                 temp = self._switchpoint(day_time=this_time_saturday)
                 temp = temp['heatSetpoint']
 
-            elif tcs_opmode == EVO_AWAY:
+            elif tcs_op_mode == EVO_AWAY:
                 # default 'Away' temp is 15C, but can be set otherwise
                 # TBC: set to CONF_AWAY_TEMP even if set setpoint is lower
                 temp = self._params[CONF_AWAY_TEMP]
 
-            elif tcs_opmode == EVO_HEATOFF:
+            elif tcs_op_mode == EVO_HEATOFF:
                 # default 'HeatingOff' temp is 5C, but can be set higher
                 # the target temp can't be less than a zone's minimum setpoint
                 temp = max(self._params[CONF_OFF_TEMP], self.min_temp)
@@ -1806,7 +1814,8 @@ class EvoBoiler(EvoSlaveEntity):
             self._obj._set_dhw(data)                                            # noqa: E501; pylint: disable=protected-access
 
         except requests.exceptions.HTTPError as err:
-            self._handle_requests_exceptions("HTTPError", err)
+            if not self._handle_exception("HTTPError", str(err)):
+                raise
 
         if self._params[CONF_USE_HEURISTICS]:
             self._status['stateStatus']['state'] = state
