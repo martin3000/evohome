@@ -104,6 +104,7 @@ CONF_LOCATION_IDX = 'location_idx'
 CONF_AWAY_TEMP = 'away_temp'
 CONF_OFF_TEMP = 'off_temp'
 
+# DELETEME
 API_VER = '0.2.7'  # alternatively, '0.2.5' is the version used elsewhere in HA
 
 if API_VER == '0.2.7':  # these vars for >=0.2.6 (is it v3 of the api?)...
@@ -121,8 +122,8 @@ else:  # these vars for <=0.2.5...
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = 'evohome'
-DATA_EVOHOME = 'data_evohome'
-DISPATCHER_EVOHOME = 'dispatcher_evohome'
+DATA_EVOHOME = 'data_' + DOMAIN
+DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
 
 # Validation of the user's configuration.
 CV_FLOAT = vol.All(vol.Coerce(float), vol.Range(min=5.0, max=35.0))
