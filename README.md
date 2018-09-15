@@ -4,7 +4,7 @@ _News: I am now working towards getting this component accepted into HA; this is
 
 Support for Honeywell (EU-only) Evohome installations: one controller, multiple heating zones and (optionally) a DHW controller.  It provides _much_ more functionality that the existing Honeywell climate component 
 
-You _could_ run it alongside the exisitng `honeywell.py` component, but you have to edit `honeywell.py` (why woudl you want to?).
+You _could_ run it alongside the exisitng `honeywell.py` component (but why would you want to?), but you have to edit `honeywell.py`.
 
 Includes support for those of you with multiple locations.  Use can choose _which_ location with `location_idx:`, and you can even have multiple concurrent locations with the following work-around: https://github.com/zxdavb/evohome/issues/10
 
