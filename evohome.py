@@ -252,7 +252,7 @@ def setup(hass, config):
 # 3. REDACT any installation data we'll never need
     if client.installation_info[0]['locationInfo']['locationId'] != 'REDACTED':
         for loc in client.installation_info:
-            loc['locationInfo']['locationId'] = 'REDACTED'
+#           loc['locationInfo']['locationId'] = 'REDACTED'
             loc['locationInfo']['streetAddress'] = 'REDACTED'
             loc['locationInfo']['city'] = 'REDACTED'
             loc['locationInfo']['locationOwner'] = 'REDACTED'
@@ -927,6 +927,11 @@ class EvoController(EvoEntity):
             "client.locations[loc_idx].status()..."
         )
 
+        _LOGGER.warn(
+            "_update_state_data(): client.locations[loc_idx].locationId = %s",
+            client.locations[loc_idx].locationId
+        )
+        
         try:
             domain_data['status'].update(  # or: domain_data['status'] =
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
