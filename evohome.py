@@ -89,12 +89,12 @@ from homeassistant.helpers.discovery import load_platform
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.temperature import display_temp as show_temp
 
+# only the controller does client api I/O during update() to get current state
+# however, any entity can call methods that will change state
+PARALLEL_UPDATES = 0
+
 # these are specific to this component
 ATTR_UNTIL = 'until'
-
-# only the controller does client api I/O during update() to get current state
-# however, any entity can call methdos that will change state
-PARALLEL_UPDATES = 0
 
 # these are specific to this component
 CONF_HIGH_PRECISION = 'high_precision'
