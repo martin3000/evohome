@@ -393,7 +393,6 @@ class EvoEntity(Entity):                                                        
         if self._type & EVO_MASTER:
             self._supported_features = \
                 SUPPORT_OPERATION_MODE | \
-                SUPPORT_TARGET_TEMPERATURE | \
                 SUPPORT_AWAY_MODE
 
         elif self._type & EVO_ZONE:
@@ -646,43 +645,35 @@ class EvoEntity(Entity):                                                        
     @property
     def state_attributes(self):
         """Return the optional state attributes."""
-        # Re: state_attributes(), HA assumes Climate objects have:
-        # - self.current_temperature:      True for Heating & DHW zones
-        # - self.target_temperature:       True for Heating zones only
-        # - self.min_temp & self.max_temp: True for Heating zones only
+        # Controllers do not have a temperature at all, but we must 'emulate'
+        # one (using average temp of all zones), as it is a climate object.
 
-        if self._type & EVO_SLAVE:
-            # Zones & DHW controllers report a current temperature
-            # they have different precision, & a zone's precision may change
-            data = {
-                ATTR_CURRENT_TEMPERATURE: show_temp(
-                    self.hass,
-                    self.current_temperature,
-                    self.temperature_unit,
-                    self.precision
-                ),
-            }
-        else:
-            # Controllers do not have a temperature at all
-            data = {}
-
-        if self._type & EVO_DHW:
-            # Zones & DHW controllers report a current temperature
-            # they have different precision, & a zone's precision may change
-            # lowest possible target_temp
-            data[ATTR_MIN_TEMP] = show_temp(
+        # Zones & DHW controllers report a current_temperature, but they may
+        # have a different precision, & a zone's precision may even change!
+        data = {
+            ATTR_CURRENT_TEMPERATURE: show_temp(
                 self.hass,
-                self.min_temp,
+                self.current_temperature,
                 self.temperature_unit,
                 self.precision
-            )
-            # highest possible target_temp
-            data[ATTR_MAX_TEMP] = show_temp(
-                self.hass,
-                self.max_temp,
-                self.temperature_unit,
-                self.precision
-            )
+            ),
+        }
+
+        # Controllers, Zones and DHW may all have different min/max temps, and
+        # the min/max temp of a zone may even change!
+        data[ATTR_MIN_TEMP] = show_temp(
+            self.hass,
+            self.min_temp,
+            self.temperature_unit,
+            self.precision
+        )
+        # highest possible target_temp
+        data[ATTR_MAX_TEMP] = show_temp(
+            self.hass,
+            self.max_temp,
+            self.temperature_unit,
+            self.precision
+        )
 
         # Heating zones also have a target temperature (and a setpoint)
         if self._supported_features & SUPPORT_TARGET_TEMPERATURE:
