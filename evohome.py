@@ -642,6 +642,59 @@ class EvoEntity(Entity):                                                        
 #       _LOGGER.debug("current_operation(%s) = %s", self._id, curr_op)
         return curr_op
 
+    @property
+    def temperature_unit(self):
+        """Return the temperature unit to use in the frontend UI."""
+#       _LOGGER.debug("temperature_unit(%s) = %s", self._id, TEMP_CELSIUS)
+        return TEMP_CELSIUS
+
+    @property
+    def precision(self):
+        """Return the temperature precision to use in the frontend UI."""
+        if self._params[CONF_HIGH_PRECISION]:
+            precision = PRECISION_TENTHS  # and is actually 0.01 for zones!
+        elif self._type & EVO_MASTER:
+            precision = PRECISION_HALVES
+        elif self._type & EVO_ZONE:
+            precision = PRECISION_HALVES
+        elif self._type & EVO_DHW:
+            precision = PRECISION_WHOLE
+
+        _LOGGER.debug("precision(%s) = %s", self._id, precision)
+        return precision
+
+    @property
+    def min_temp(self):
+        """Return the minimum target temp (setpoint) of a zone.
+
+        Setpoints are 5-35C by default, but can be further limited.  Only
+        applies to heating zones, not DHW controllers (boilers).
+        """
+        if self._type & EVO_MASTER:
+            temp = MIN_TEMP
+        elif self._type & EVO_ZONE:
+            temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
+        elif self._type & EVO_DHW:
+            temp = 30
+        _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
+        return temp
+
+    @property
+    def max_temp(self):
+        """Return the maximum target temp (setpoint) of a zone.
+
+        Setpoints are 5-35C by default, but can be further limited.  Only
+        applies to heating zones, not DHW controllers (boilers).
+        """
+        if self._type & EVO_MASTER:
+            temp = MAX_TEMP
+        elif self._type & EVO_ZONE:
+            temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
+        elif self._type & EVO_DHW:
+            temp = 85
+        _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
+        return temp
+
 
 class EvoController(EvoEntity, ClimateDevice):
     """Base for a Honeywell evohome hub/Controller device.
@@ -1041,26 +1094,6 @@ class EvoController(EvoEntity, ClimateDevice):
         _LOGGER.warn("current_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
 
-    @property
-    def temperature_unit(self):
-        """Return the temperature unit to use in the frontend UI."""
-        return TEMP_CELSIUS
-
-    @property
-    def precision(self):
-        """Return the temperature precision to use in the frontend UI."""
-        return PRECISION_TENTHS
-
-    @property
-    def min_temp(self):
-        """Return the minimum target temp (setpoint) of a zone."""
-        return MIN_TEMP
-
-    @property
-    def max_temp(self):
-        """Return the maximum target temp (setpoint) of a zone."""
-        return MAX_TEMP
-
 
 class EvoSlaveEntity(EvoEntity):
     """Base for Honeywell evohome slave devices (Heating/DHW zones)."""
@@ -1209,53 +1242,6 @@ class EvoSlaveEntity(EvoEntity):
 
         _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)
         return curr_temp
-
-    @property
-    def temperature_unit(self):
-        """Return the temperature unit to use in the frontend UI."""
-#       _LOGGER.debug("temperature_unit(%s) = %s", self._id, TEMP_CELSIUS)
-        return TEMP_CELSIUS
-
-    @property
-    def precision(self):
-        """Return the temperature precision to use in the frontend UI."""
-        if self._params[CONF_HIGH_PRECISION]:
-            precision = PRECISION_TENTHS  # and is actually 0.01 for zones!
-        elif self._type & EVO_ZONE:
-            precision = PRECISION_HALVES
-        elif self._type & EVO_DHW:
-            precision = PRECISION_WHOLE
-
-#       _LOGGER.debug("precision(%s) = %s", self._id, precision)
-        return precision
-
-    @property
-    def min_temp(self):
-        """Return the minimum target temp (setpoint) of a zone.
-
-        Setpoints are 5-35C by default, but can be further limited.  Only
-        applies to heating zones, not DHW controllers (boilers).
-        """
-        if self._type & EVO_ZONE:
-            temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
-        elif self._type & EVO_DHW:
-            temp = 30
-#       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
-        return temp
-
-    @property
-    def max_temp(self):
-        """Return the maximum target temp (setpoint) of a zone.
-
-        Setpoints are 5-35C by default, but can be further limited.  Only
-        applies to heating zones, not DHW controllers (boilers).
-        """
-        if self._type & EVO_ZONE:
-            temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
-        elif self._type & EVO_DHW:
-            temp = 85
-#       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
-        return temp
 
     def update(self):
         """Get the latest state data of the Heating/DHW zone.
