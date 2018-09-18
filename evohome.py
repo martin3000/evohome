@@ -99,7 +99,14 @@ PARALLEL_UPDATES = 0
 # these are specific to this component
 ATTR_UNTIL = 'until'
 
-# these are specific to this component
+DOMAIN = 'evohome'
+DATA_EVOHOME = 'data_' + DOMAIN
+DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
+
+MIN_TEMP = 5
+MAX_TEMP = 35
+MIN_SCAN_INTERVAL = 180
+
 CONF_HIGH_PRECISION = 'high_precision'
 CONF_USE_HEURISTICS = 'use_heuristics'
 CONF_USE_SCHEDULES = 'use_schedules'
@@ -122,16 +129,8 @@ else:  # these vars for <=0.2.5...
     SETPOINT_STATE = 'heatSetpointStatus'
     TARGET_TEMPERATURE = 'targetTemperature'
 
-DOMAIN = 'evohome'
-DATA_EVOHOME = 'data_' + DOMAIN
-DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
-
-MIN_TEMP = 5
-MAX_TEMP = 35
-MIN_SCAN_INTERVAL = 180
-
 # Validation of the user's configuration.
-CV_FLOAT = vol.All(vol.Coerce(float), vol.Range(min=5.0, max=35.0))
+CV_FLOAT = vol.All(vol.Coerce(float), vol.Range(min=MIN_TEMP, max=MAX_TEMP))
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
