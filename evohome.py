@@ -89,6 +89,9 @@ from homeassistant.helpers.discovery import load_platform
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.temperature import display_temp as show_temp
 
+# https://www.home-assistant.io/components/logger/
+_LOGGER = logging.getLogger(__name__)
+
 # only the controller does client api I/O during update() to get current state
 # however, any entity can call methods that will change state
 PARALLEL_UPDATES = 0
@@ -108,8 +111,8 @@ CONF_OFF_TEMP = 'off_temp'
 API_VER = '0.2.7'  # alternatively, '0.2.5' is the version used elsewhere in HA
 
 if API_VER == '0.2.7':  # these vars for >=0.2.6 (is it v3 of the api?)...
-    REQUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']
-#   REQUIREMENTS = ['evohomeclient==0.2.7']
+#   REQUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']
+    REQUIREMENTS = ['evohomeclient==0.2.7']
     SETPOINT_CAPABILITIES = 'setpointCapabilities'
     SETPOINT_STATE = 'setpointStatus'
     TARGET_TEMPERATURE = 'targetHeatTemperature'
@@ -119,12 +122,13 @@ else:  # these vars for <=0.2.5...
     SETPOINT_STATE = 'heatSetpointStatus'
     TARGET_TEMPERATURE = 'targetTemperature'
 
-# https://www.home-assistant.io/components/logger/
-_LOGGER = logging.getLogger(__name__)
-
 DOMAIN = 'evohome'
 DATA_EVOHOME = 'data_' + DOMAIN
 DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
+
+MIN_TEMP = 5
+MAX_TEMP = 35
+MIN_SCAN_INTERVAL = 180
 
 # Validation of the user's configuration.
 CV_FLOAT = vol.All(vol.Coerce(float), vol.Range(min=5.0, max=35.0))
@@ -133,7 +137,8 @@ CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
         vol.Required(CONF_USERNAME): cv.string,
         vol.Required(CONF_PASSWORD): cv.string,
-        vol.Optional(CONF_SCAN_INTERVAL, default=180): cv.positive_int,
+        vol.Optional(CONF_SCAN_INTERVAL,
+                     default=MIN_SCAN_INTERVAL): cv.positive_int,
 
         vol.Optional(CONF_HIGH_PRECISION, default=True): cv.boolean,
         vol.Optional(CONF_USE_HEURISTICS, default=False): cv.boolean,
@@ -338,20 +343,20 @@ class EvoEntity(Entity):                                                        
         Most read-only properties are set here.  SOe are pseudo read-only,
         for example name (which can change).
         """
-# set the usual object references
+        # set the usual object references
         self.hass = hass
         self.client = client
         domain_data = hass.data[DATA_EVOHOME]
 
 
-# set the entity's own object reference & identifier
+        # set the entity's own object reference & identifier
         if self._type & EVO_MASTER:
             self._id = obj_ref.systemId
         else:  # self._type & EVO_SLAVE:
             self._id = obj_ref.zoneId  # OK for DHW too, as == obj_ref.dhwId
 
 
-# set the entity's configuration shortcut (considered static)
+        # set the entity's configuration shortcut (considered static)
         temperature_control_system = domain_data['config'][GWS][0][TCS][0]
 
         if self._type & EVO_MASTER:
@@ -370,7 +375,7 @@ class EvoEntity(Entity):                                                        
         self._params = domain_data['params']
 
 
-# set the entity's name & icon (treated as static vales)
+        # set the entity's name & icon (treated as static vales)
         if self._type & EVO_MASTER:
             self._name = "_" + domain_data['config']['locationInfo']['name']
             self._icon = "mdi:thermostat"
@@ -385,21 +390,25 @@ class EvoEntity(Entity):                                                        
             self._icon = "mdi:thermometer-lines"
 
 
-# set the entity's supported features
+        # set the entity's supported features
         if self._type & EVO_MASTER:
             self._supported_features = \
-                SUPPORT_OPERATION_MODE | SUPPORT_AWAY_MODE
+                SUPPORT_OPERATION_MODE | \
+                SUPPORT_TARGET_TEMPERATURE | \
+                SUPPORT_AWAY_MODE
 
         elif self._type & EVO_ZONE:
             self._supported_features = \
-                SUPPORT_OPERATION_MODE | SUPPORT_TARGET_TEMPERATURE
+                SUPPORT_OPERATION_MODE | \
+                SUPPORT_TARGET_TEMPERATURE
 
         elif self._type & EVO_DHW:
             self._supported_features = \
-                SUPPORT_OPERATION_MODE | SUPPORT_ON_OFF
+                SUPPORT_OPERATION_MODE | \
+                SUPPORT_ON_OFF
 
 
-# set the entity's operation list (hard-coded so for a particular order)
+        # set the entity's operation list (hard-coded for a particular order)
         if self._type & EVO_MASTER:
             # self._config['allowedSystemModes']
             self._op_list = [
@@ -417,7 +426,7 @@ class EvoEntity(Entity):                                                        
             self._op_list = [EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER]
 
 
-# create timers, etc. here, but they're maintained in update(), schedule()
+        # create timers, etc. here, but they're maintained in update(), schedule()
         self._status = {}
         self._timers = domain_data['timers']
 
@@ -434,12 +443,12 @@ class EvoEntity(Entity):                                                        
             self._schedule['updated'] = datetime.min
 
 
-# set the entity's (initial) behaviour
+        # set the entity's (initial) behaviour
         self._available = False  # will be True after first update()
         self._should_poll = bool(self._type & EVO_MASTER)
 
 
-# create a listener for (internal) update packets...
+        # create a listener for (internal) update packets...
         hass.helpers.dispatcher.async_dispatcher_connect(
             DISPATCHER_EVOHOME,
             self._connect
@@ -493,14 +502,13 @@ class EvoEntity(Entity):                                                        
             can_handle_this_exception = False
 
 
-# Do we need to back off from current scan_interval?
-        if do_backoff is True: # api rate limit has been exceeded
-            # increase the scan_interval
+        # Do we need to back off from current scan_interval?
+        if do_backoff is True:
+            # api rate limit has been exceeded, so increase the scan_interval
             old_scan_interval = self._params[CONF_SCAN_INTERVAL]
             new_scan_interval = min(old_scan_interval * 2, 300)
             self._params[CONF_SCAN_INTERVAL] = new_scan_interval
 
-            # warn the user
             _LOGGER.warning(
                 "API rate limit has been exceeded, suspending polling for %s "
                 "seconds, & increasing '%s' from %s to %s seconds.",
@@ -510,7 +518,7 @@ class EvoEntity(Entity):                                                        
                 new_scan_interval
             )
 
-            # wait for a short while - 3 scan_intervals
+            # and also wait for a short while - 3 scan_intervals
             self._timers['statusUpdated'] = datetime.now() + \
                 timedelta(seconds=new_scan_interval * 3)
 
@@ -719,7 +727,7 @@ class EvoEntity(Entity):                                                        
         return data
 
 
-class EvoController(EvoEntity):
+class EvoController(EvoEntity, ClimateDevice):
     """Base for a Honeywell evohome hub/Controller device.
 
     The Controller (aka TCS, temperature control system) is the master of all
@@ -928,11 +936,11 @@ class EvoController(EvoEntity):
             "client.locations[loc_idx].status()..."
         )
 
-        _LOGGER.warn(
+        _LOGGER.debug(
             "_update_state_data(): client.locations[loc_idx].locationId = %s",
             client.locations[loc_idx].locationId
         )
-        
+
         try:
             domain_data['status'].update(  # or: domain_data['status'] =
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
@@ -949,7 +957,7 @@ class EvoController(EvoEntity):
             "_update_state_data(): domain_data['status'] = %s",
             domain_data['status']
         )
-        _LOGGER.warn("self._timers = %s, domain_data['timers'] = %s", self._timers, domain_data['timers'])
+        _LOGGER.debug("self._timers = %s, domain_data['timers'] = %s", self._timers, domain_data['timers'])
 
     # 2. AFTER obtaining state data, do we need to increase precision of temps?
         if self._params[CONF_HIGH_PRECISION] and \
@@ -1035,7 +1043,7 @@ class EvoController(EvoEntity):
                     if 'code' in response[0]:
                         err_hint = response[0]['code']
                         err_text = response[0]['message']
-                        self._handle_exception(err_hint, err_text) 
+                        self._handle_exception(err_hint, err_text)
                 # Or what else could it be?
                 _LOGGER.debug("TypeError: ec1_api.user_data = %s", response)
                 #   raise  # no raise for TypeError
@@ -1094,6 +1102,48 @@ class EvoController(EvoEntity):
         )
 
         return True
+
+    @property
+    def target_temperature(self):
+        """Return the average target temperature of the Heating/DHW zones."""
+        temps = [zone['setpointStatus']['targetHeatTemperature']
+                 for zone in self._status['zones']]
+        avg_temp = sum(temps) / len(temps) if temps else None
+
+        _LOGGER.warn("target_temperature(%s) = %s", self._id, avg_temp)
+        return avg_temp
+
+    @property
+    def current_temperature(self):
+        """Return the average current temperature of the Heating/DHW zones."""
+        tmp_dict = [x for x in self._status['zones']
+                    if x['temperatureStatus']['isAvailable'] is True]
+
+        temps = [zone['temperatureStatus']['temperature'] for zone in tmp_dict]
+        avg_temp = sum(temps) / len(temps) if temps else None
+
+        _LOGGER.warn("current_temperature(%s) = %s", self._id, avg_temp)
+        return avg_temp
+
+    @property
+    def temperature_unit(self):
+        """Return the temperature unit to use in the frontend UI."""
+        return TEMP_CELSIUS
+
+    @property
+    def precision(self):
+        """Return the temperature precision to use in the frontend UI."""
+        return PRECISION_TENTHS
+
+    @property
+    def min_temp(self):
+        """Return the minimum target temp (setpoint) of a zone."""
+        return MIN_TEMP
+
+    @property
+    def max_temp(self):
+        """Return the maximum target temp (setpoint) of a zone."""
+        return MAX_TEMP
 
 
 class EvoSlaveEntity(EvoEntity):
@@ -1411,7 +1461,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
 
             if state != zone_op_mode and zone_op_mode != EVO_FOLLOW:
                 _LOGGER.warning(
-                    "state(%s) = %s, via heuristics (via api = %s)",
+                    "state(%s) = %s, via heuristics (but via api = %s)",
                     self._id,
                     state,
                     self._status[SETPOINT_STATE]['setpointMode']
