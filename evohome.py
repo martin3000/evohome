@@ -643,7 +643,7 @@ class EvoEntity(Entity):                                                        
         return curr_op
 
     @property
-    def state_attributes(self):
+    def xtate_attributes(self):
         """Return the optional state attributes."""
         # Controllers do not have a temperature at all, but we must 'emulate'
         # one (using average temp of all zones), as it is a climate object.
