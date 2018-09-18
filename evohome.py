@@ -108,7 +108,8 @@ CONF_OFF_TEMP = 'off_temp'
 API_VER = '0.2.7'  # alternatively, '0.2.5' is the version used elsewhere in HA
 
 if API_VER == '0.2.7':  # these vars for >=0.2.6 (is it v3 of the api?)...
-    REQUIREMENTS = ['evohomeclient==0.2.7']
+    REQUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']
+#   REQUIREMENTS = ['evohomeclient==0.2.7']
     SETPOINT_CAPABILITIES = 'setpointCapabilities'
     SETPOINT_STATE = 'setpointStatus'
     TARGET_TEMPERATURE = 'targetHeatTemperature'
