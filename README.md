@@ -53,15 +53,14 @@ logger:
 
 ## Improvements over the existing Honeywell component
 
-This list is not up-to-date...
-
 1. Uses v2 of the (EU) API via evohome-client: several minor benefits, but v2 temperature precision is reduced from .1C to .5C), so...
-2. Leverages v1 of the API to increase precision of reported temps to 0.1C (actually the API reports to 0.01C, but HA only handles 0.1); transparently falls back to v2 temps if unable to get v1 temps. NB: cant do this if >1 location.
+2. Optionally leverages v1 of the API to _increase_ precision of reported temps to 0.1C (actually the API reports to 0.01C, but HA only displays 0.1); transparently falls back to v2 temps if unable to get v1 temps. NB: you can't do this if you have >1 location - see work-around issue/#10.
 3. Exposes the controller as a separate entity (from the zones), and...
-4. Correctly assigns operating modes to the controller (e.g. Eco/Away modes) and it's zones (e.g. TemporaryOverride/PermanentOverride modes) - zones state is set to controllers operating mode if in FollowSchedule mode
+4. Correctly assigns operating modes to the controller (e.g. Eco/Away modes) and it's zones (e.g. TemporaryOverride/PermanentOverride modes) - although zones state is set to controllers operating mode if it is in FollowSchedule mode.
 5. Greater efficiency: loads all entities in a single `add_devices()` call, and uses many fewer api calls to Honeywell during initialisation/polling.
-6. The DHW is exposed.
-7. Much better reporting of problems communicating with Honeywell's web servers via the client library - entities will report themselves a unavailable in usch scenarios.
+6. The DHW is exposed: its `current_temperature` can be read and it's `operating_mode` can bet set.
+7. Much better reporting of problems communicating with Honeywell's web servers via the client library - entities will report themselves a 'unavailable' (`self.available = True`) in such scenarios.
+8. Other stuff I've forgotten.
 
 ## Problems with current implemenation
 
@@ -69,5 +68,10 @@ This list is not up-to-date...
 1. The controller, which doesn't have a `current_temperature` is implemented as a climate entity, and HA expects all climate entities to report a temperature.  This causes problems with HA.
 2. Away mode (as understood by HA), is not implemented as yet.  Away mode is available via the controller.
 6. No provision for changing schedules (yet).  This is for a future release.
-7. The `scan_interval` parameter defaults to 180 secs, but could be as low as 60 secs.  This is OK as this code polls Honeywell servers only 1x (or 3x) per scan interval (is +2 polls for v1 temperatures), or 60 per hour (plus a few more once hourly).  This compares to the existing evohome implementation, which is at least one poll per zone per scan interval.  I understand that up to 250 polls per hour is considered OK, YMMV.
-8. DHW is WIP.  Presently, there is no 'boiler' entity type in HA.
+7. DHW is WIP.  Presently, there is no 'boiler' entity type in HA.
+
+## Notes about `scan_interval`
+
+The `scan_interval` parameter defaults to 180 secs, but could be as low as 60 secs.  This is OK as this code polls Honeywell servers only 1x (or 3x) per scan interval (there is +2 polls for v1 temperatures), or 60 per hour (plus a few more once hourly).  This compares to the existing evohome implementation, which is at least one poll per zone per scan interval.  
+
+I understand that up to 250 polls per hour is considered OK, YMMV.
