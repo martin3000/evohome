@@ -64,11 +64,11 @@ logger:
 
 ## Problems with current implemenation
 
-0. It takes about 60-180 seconds for the client api to accurately report changes made elsewhere in the location (usu. by the Controller).  This is a sad fact if Internet Polling & nothing can be done about it.
-1. The controller, which doesn't have a `current_temperature` is implemented as a climate entity, and HA expects all climate entities to report a temperature.  This causes problems with HA.
-2. Away mode (as understood by HA), is not implemented as yet.  Away mode is available via the controller.
-6. No provision for changing schedules (yet).  This is for a future release.
-7. DHW is WIP.  Presently, there is no 'boiler' entity type in HA.
+1. It takes about 60-180 seconds for the client api to accurately report changes made elsewhere in the location (usu. by the Controller).  This is a sad fact of the Internet Polling architecture & nothing can be done about it.
+2. The controller, which doesn't have a `current_temperature` is implemented as a climate entity, and HA expects all climate entities to report a temperature.  This causes problems with HA, and so it displays an average of all its zones' current/target temperatures.
+3. Away mode (as understood by HA), is not fully implemented as yet.  HA has difficulties with more 'complex' climate entities (this is under review). Away mode is available via the controller.
+4. No provision for changing schedules (yet).  This is for a future release.
+5. DHW is WIP.  Presently, there is no 'boiler' entity type in HA.
 
 ## Notes about `scan_interval`
 
