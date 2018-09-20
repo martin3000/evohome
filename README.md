@@ -60,7 +60,9 @@ logger:
 5. Greater efficiency: loads all entities in a single `add_devices()` call, and uses many fewer api calls to Honeywell during initialisation/polling.
 6. The DHW is exposed: its `current_temperature` can be read and it's `operating_mode` can bet set.
 7. Much better reporting of problems communicating with Honeywell's web servers via the client library - entities will report themselves a 'unavailable' (`self.available = True`) in such scenarios.
-8. Other stuff I've forgotten.
+8. If the API rate limit is exceeded, the component will implement a backoff algorithm.
+9. Much better reporting of issues with `_LOGGER.warnings()` in `home-assistant.log`.
+9. Other stuff I've forgotten.
 
 ## Problems with current implemenation
 
