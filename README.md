@@ -1,6 +1,6 @@
 # Home Assistant Custom Component for Honeywell Evotouch
 
-_News: I am now working towards getting this component accepted into HA; this is the `custom_component` version, which I plan to keep up-to-date._
+_News: I am now working towards getting this component accepted into HA; this is the `custom_component` version, which I plan to keep up-to-date untill all of its functionality in accepted into HA._
 
 Support for Honeywell (EU-only) Evohome installations: one controller, multiple heating zones and (optionally) a DHW controller.  It provides _much_ more functionality that the existing Honeywell climate component 
 
