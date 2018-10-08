@@ -34,7 +34,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     client = evo_data['client']
     loc_idx = evo_data['params'][CONF_LOCATION_IDX]
 
-# 1/3: Collect the (master) controller - evohomeclient has no defined way of
+# 1/3: Collect the (parent) controller - evohomeclient has no defined way of
 # accessing non-default location other than using the protected member
     tcs_obj_ref = client.locations[loc_idx]._gateways[0]._control_systems[0]    # noqa E501; pylint: disable=protected-access
 
@@ -45,10 +45,11 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         loc_idx,
         tcs_obj_ref.location.locationId,
     )
-    master = EvoController(hass, client, tcs_obj_ref)
-    slaves = []
+    parent = EvoController(hass, client, tcs_obj_ref)
+    parent._children = children = []
+    parent._dhw = dhw = []
 
-# 2/3: Collect each (slave) Heating zone as a (climate component) device
+# 2/3: Collect each (child) Heating zone as a (climate component) device
     for zone_obj_ref in tcs_obj_ref._zones:                                     # noqa E501; pylint: disable=protected-access
         _LOGGER.info(
             "setup_platform(): Found Zone device, id: %s, type: %s",
@@ -57,18 +58,24 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         )
 # We may not handle some zones correctly (e.g. UFH) - how to test for them?
 #       if zone['zoneType'] in [ "RadiatorZone", "ZoneValves" ]:
-        slaves.append(EvoZone(hass, client, zone_obj_ref))
+        children.append(EvoZone(hass, client, zone_obj_ref))
 
-# 3/3: Collect any (slave) DHW zone as a (climate component) device
+    parent._zones = children
+
+# 3/3: Collect any (child) DHW zone as a (climate component) device
     if tcs_obj_ref.hotwater:
         _LOGGER.info(
             "setup_platform(): Found DHW device, id: %s, type: %s",
             tcs_obj_ref.hotwater.zoneId,  # also has .dhwId (same)
             tcs_obj_ref.hotwater.zone_type
         )
-        slaves.append(EvoBoiler(hass, client, tcs_obj_ref.hotwater))
+        parent._dhw = EvoBoiler(hass, client, tcs_obj_ref.hotwater)
+        children.append(parent._dhw)
 
-# for efficiency, add controller + all zones in a single call (add_devices)
-    add_entities([master] + slaves, update_before_add=False)
+    parent._children = children
+
+
+# for efficiency, add parent (controller) + all children in a single call
+    add_entities([parent] + children, update_before_add=False)
 
     return True

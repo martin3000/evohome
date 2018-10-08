@@ -27,8 +27,8 @@ https://home-assistant.io/components/evohome/
 """
 
 # Glossary
-# TCS - temperature control system (a.k.a. Controller, Master), which can
-# have up to 13 Slaves:
+# TCS - temperature control system (a.k.a. Controller, Parent), which can
+# have up to 13 children:
 #   0-12 Heating zones (a.k.a. Zone), and
 #   0-1 DHW controller, (a.k.a. Boiler)
 
@@ -166,8 +166,8 @@ EVO_OPENWINDOW = 'OpenWindow'
 EVO_FROSTMODE = 'FrostProtect'
 
 # bit masks for dispatcher packets
-EVO_MASTER = 0x01
-EVO_SLAVE = 0x02
+EVO_PARENT = 0x01
+EVO_CHILD = 0x02
 EVO_ZONE = 0x04
 EVO_DHW = 0x08
 EVO_UNKNOWN = 0x10  # there shouldn't ever be any of these
@@ -300,11 +300,11 @@ def setup(hass, config):
 # Now we're ready to go, but we have no state as yet, so...
     def _first_update(event):
         """Let the controller know it can obtain it's first update."""
-    # send a message to the master to do its first update
+    # send a message to the parent to do its first update
         pkt = {
             'sender': 'setup()',
             'signal': 'update',
-            'to': EVO_MASTER
+            'to': EVO_PARENT
         }
         hass.helpers.dispatcher.async_dispatcher_send(
             DISPATCHER_EVOHOME,
@@ -324,7 +324,7 @@ def setup(hass, config):
 
 
 class EvoEntity(Entity):                                                        # noqa: D204,E501
-    """Base for Honeywell evohome slave devices (Heating/DHW zones)."""
+    """Base for Honeywell evohome child devices (Heating/DHW zones)."""
                                                                                 # noqa: E116,E501; pylint: disable=no-member
     def __init__(self, hass, client, obj_ref):
         """Initialize the evohome entity.
@@ -339,16 +339,16 @@ class EvoEntity(Entity):                                                        
 
 
         # set the entity's own object reference & identifier
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             self._id = obj_ref.systemId
-        else:  # self._type & EVO_SLAVE:
+        else:  # self._type & EVO_CHILD:
             self._id = obj_ref.zoneId  # OK for DHW too, as == obj_ref.dhwId
 
 
         # set the entity's configuration shortcut (considered static)
         temperature_control_system = evo_data['config'][GWS][0][TCS][0]
 
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             self._config = temperature_control_system
 #           self._config = evo_data['config']
 
@@ -365,7 +365,7 @@ class EvoEntity(Entity):                                                        
 
 
         # set the entity's name & icon (treated as static vales)
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             self._name = "_" + evo_data['config']['locationInfo']['name']
             self._icon = "mdi:thermostat"
 
@@ -380,7 +380,7 @@ class EvoEntity(Entity):                                                        
 
 
         # set the entity's supported features
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             self._supported_features = \
                 SUPPORT_OPERATION_MODE | \
                 SUPPORT_AWAY_MODE
@@ -397,11 +397,11 @@ class EvoEntity(Entity):                                                        
 
 
         # set the entity's operation list (hard-coded for a particular order)
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             # self._config['allowedSystemModes']
             self._op_list = TCS_MODES
 
-        elif self._type & EVO_SLAVE:
+        elif self._type & EVO_CHILD:
             # self._config['setpointCapabilities']['allowedSetpointModes']
             self._op_list = [EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER]
 
@@ -410,13 +410,13 @@ class EvoEntity(Entity):                                                        
         self._status = {}
         self._timers = evo_data['timers']
 
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             self._timers['statusUpdated'] = datetime.min
-            # master is created before any slave
+            # parent is created before any child
             evo_data['schedules'] = {}
 
-        elif self._type & EVO_SLAVE:
-            # slaves update their schedules themselves
+        elif self._type & EVO_CHILD:
+            # children update their schedules themselves
             evo_data['schedules'][self._id] = {}
 
             self._schedule = evo_data['schedules'][self._id]
@@ -425,7 +425,7 @@ class EvoEntity(Entity):                                                        
 
         # set the entity's (initial) behaviour
         self._available = False  # will be True after first update()
-        self._should_poll = bool(self._type & EVO_MASTER)
+        self._should_poll = bool(self._type & EVO_PARENT)
 
 
         # create a listener for (internal) update packets...
@@ -532,7 +532,7 @@ class EvoEntity(Entity):                                                        
         """Return True is the device is available.
 
         All evohome entities are initially unavailable. Once HA has started,
-        state data is then retrieved by the Controller, and then the slaves
+        state data is then retrieved by the Controller, and then the children
         will get a state (e.g. operating_mode, current_temperature).
 
         However, evohome entities can become unavailable for other reasons.
@@ -550,7 +550,7 @@ class EvoEntity(Entity):                                                        
             self._available = False
             debug_code = '0x02'
 
-        elif self._status and (self._type & EVO_SLAVE):
+        elif self._status and (self._type & EVO_CHILD):
             # (un)available because (web site via) client api says so
             self._available = \
                 bool(self._status['temperatureStatus']['isAvailable'])
@@ -580,9 +580,9 @@ class EvoEntity(Entity):                                                        
         """Only the Controller will ever be polled.
 
         The Controller is usually (but not always) polled, and it will obtain
-        the state data for its slaves (which themselves are never polled).
+        the state data for its children (which themselves are never polled).
         """
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             pass  # the Controller will decide this as it goes along
         else:
             self._should_poll = False
@@ -614,7 +614,7 @@ class EvoEntity(Entity):                                                        
     @property
     def current_operation(self):
         """Return the operation mode of the evohome entity."""
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             curr_op = self._status['systemModeStatus']['mode']
         elif self._type & EVO_ZONE:
             curr_op = self._status[SETPOINT_STATE]['setpointMode']
@@ -635,7 +635,7 @@ class EvoEntity(Entity):                                                        
         """Return the temperature precision to use in the frontend UI."""
         if self._params[CONF_HIGH_PRECISION]:
             precision = PRECISION_TENTHS  # and is actually 0.01 for zones!
-        elif self._type & EVO_MASTER:
+        elif self._type & EVO_PARENT:
             precision = PRECISION_HALVES
         elif self._type & EVO_ZONE:
             precision = PRECISION_HALVES
@@ -652,7 +652,7 @@ class EvoEntity(Entity):                                                        
         Setpoints are 5-35C by default, but can be further limited.  Only
         applies to heating zones, not DHW controllers (boilers).
         """
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             temp = MIN_TEMP
         elif self._type & EVO_ZONE:
             temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
@@ -668,7 +668,7 @@ class EvoEntity(Entity):                                                        
         Setpoints are 5-35C by default, but can be further limited.  Only
         applies to heating zones, not DHW controllers (boilers).
         """
-        if self._type & EVO_MASTER:
+        if self._type & EVO_PARENT:
             temp = MAX_TEMP
         elif self._type & EVO_ZONE:
             temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
@@ -681,16 +681,16 @@ class EvoEntity(Entity):                                                        
 class EvoController(EvoEntity, ClimateDevice):
     """Base for a Honeywell evohome hub/Controller device.
 
-    The Controller (aka TCS, temperature control system) is the master of all
-    the slave (CH/DHW) devices.
+    The Controller (aka TCS, temperature control system) is the parent of all
+    the child (CH/DHW) devices.
     """
 
     def __init__(self, hass, client, obj_ref):
         """Initialize the evohome Controller."""
         self._obj = obj_ref
-        self._type = EVO_MASTER
+        self._type = EVO_PARENT
 
-# Note, for access to slave object references, can use:
+# Note, for access to child object references, can use:
 # - heating zones:  self._obj._zones
 # - DHW controller: self._obj.hotwater
 
@@ -800,7 +800,7 @@ class EvoController(EvoEntity, ClimateDevice):
 
 
 # PART 3: HEURISTICS - update the internal state of the Zones
-# For (slave) Zones, when the (master) Controller enters:
+# For (child) Zones, when the (parent) Controller enters:
 # EVO_AUTOECO, it resets EVO_TEMPOVER (but not EVO_PERMOVER) to EVO_FOLLOW
 # EVO_DAYOFF,  it resets EVO_TEMPOVER (but not EVO_PERMOVER) to EVO_FOLLOW
 
@@ -809,7 +809,7 @@ class EvoController(EvoEntity, ClimateDevice):
         if self._params[CONF_USE_HEURISTICS]:
             _LOGGER.debug(
                 "set_operation_mode(): Using heuristics to change "
-                "slave's operating modes",
+                "child's operating modes",
                 )
 
             for zone in self._status['zones']:
@@ -841,7 +841,7 @@ class EvoController(EvoEntity, ClimateDevice):
             pkt = {
                 'sender': 'controller',
                 'signal': 'update',
-                'to': EVO_SLAVE
+                'to': EVO_CHILD
             }
             self.hass.helpers.dispatcher.async_dispatcher_send(
                 DISPATCHER_EVOHOME,
@@ -1007,9 +1007,9 @@ class EvoController(EvoEntity, ClimateDevice):
     def update(self):
         """Get the latest state data of the installation.
 
-        This includes state data for the Controller and its slave devices, such
+        This includes state data for the Controller and its child devices, such
         as the operating_mode of the Controller and the current_temperature
-        of slaves.
+        of children.
 
         This is not asyncio-friendly due to the underlying client api.
         """
@@ -1041,11 +1041,11 @@ class EvoController(EvoEntity, ClimateDevice):
                 status
             )
 
-# Finally, send a message to the slaves to update themselves
+# Finally, send a message to the children to update themselves
         pkt = {
             'sender': 'controller',
             'signal': 'update',
-            'to': EVO_SLAVE
+            'to': EVO_CHILD
         }
         self.hass.helpers.dispatcher.async_dispatcher_send(
             DISPATCHER_EVOHOME,
@@ -1061,7 +1061,7 @@ class EvoController(EvoEntity, ClimateDevice):
                  for zone in self._status['zones']]
         avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
-#       _LOGGER.debug("target_temperature(%s) = %s", self._id, avg_temp)
+        _LOGGER.debug("target_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
 
     @property
@@ -1073,21 +1073,21 @@ class EvoController(EvoEntity, ClimateDevice):
         temps = [zone['temperatureStatus']['temperature'] for zone in tmp_dict]
         avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
-#       _LOGGER.debug("current_temperature(%s) = %s", self._id, avg_temp)
+        _LOGGER.debug("current_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
 
 
-class EvoSlaveEntity(EvoEntity):
-    """Base for Honeywell evohome slave devices (Heating/DHW zones)."""
+class EvoChildEntity(EvoEntity):
+    """Base for Honeywell evohome child devices (Heating/DHW zones)."""
 
     def __init__(self, hass, client, obj_ref):
         """Initialize the evohome evohome Heating/DHW zone."""
         self._obj = obj_ref
 
         if self._obj.zone_type == 'temperatureZone':
-            self._type = EVO_SLAVE | EVO_ZONE
+            self._type = EVO_CHILD | EVO_ZONE
         elif self._obj.zone_type == 'domesticHotWater':
-            self._type = EVO_SLAVE | EVO_DHW
+            self._type = EVO_CHILD | EVO_DHW
         else:  # this should never happen!
             self._type = EVO_UNKNOWN
 
@@ -1222,7 +1222,7 @@ class EvoSlaveEntity(EvoEntity):
                 self._id
             )
 
-        _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)
+#       _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)
         return curr_temp
 
     def update(self):
@@ -1300,7 +1300,7 @@ class EvoSlaveEntity(EvoEntity):
         return True
 
 
-class EvoZone(EvoSlaveEntity, ClimateDevice):
+class EvoZone(EvoChildEntity, ClimateDevice):
     """Base for a Honeywell evohome heating zone (e.g. a TRV)."""
 
     @property
@@ -1701,7 +1701,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         return step
 
 
-class EvoBoiler(EvoSlaveEntity):
+class EvoBoiler(EvoChildEntity):
     """Base for a Honeywell evohome DHW controller (aka boiler)."""
 
     def _set_dhw_state(self, state=None, mode=None, until=None):
