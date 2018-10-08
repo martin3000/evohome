@@ -11,7 +11,7 @@ evohome:
 
 These config parameters are presented with their default values:
 
-# scan_interval: 300     # seconds, you can probably get away with 60
+# scan_interval: 300     # seconds, you can probably get away with 180
 # high_precision: true   # tenths instead of halves
 # location_idx: 0        # if you have more than 1 location, use this
 
@@ -38,7 +38,7 @@ https://home-assistant.io/components/evohome/
 
 import logging
 from datetime import datetime, timedelta
-import requests
+from requests.exceptions import ConnectionError, HTTPError
 import voluptuous as vol
 
 from homeassistant.components.climate import (
@@ -195,116 +195,106 @@ def setup(hass, config):
     One controller with 0+ heating zones (e.g. TRVs, relays) and, optionally, a
     DHW controller.  Does not work for US-based systems.
     """
-# 0. internal data, such as installation, state & timers...
-    hass.data[DATA_EVOHOME] = {}
+    evo_data = hass.data[DATA_EVOHOME] = {}
+    evo_data['timers'] = {}
 
-    domain_data = hass.data[DATA_EVOHOME]
-    domain_data['timers'] = {}
-
-# 1. pull the configuration parameters...
-    domain_data['params'] = dict(config[DOMAIN])
+    evo_data['params'] = dict(config[DOMAIN])
     # scan_interval - rounded up to nearest 60 secz
-    domain_data['params'][CONF_SCAN_INTERVAL] \
+    evo_data['params'][CONF_SCAN_INTERVAL] \
         = (int((config[DOMAIN][CONF_SCAN_INTERVAL] - 1) / 60) + 1) * 60
 
     if _LOGGER.isEnabledFor(logging.DEBUG):  # then redact username, password
-        tmp = dict(domain_data['params'])
+        tmp = dict(evo_data['params'])
         tmp[CONF_USERNAME] = 'REDACTED'
         tmp[CONF_PASSWORD] = 'REDACTED'
 
         _LOGGER.debug("setup(): Configuration parameters: %s", tmp)
 
-# 2. instantiate the client
     from evohomeclient2 import EvohomeClient
 
     _LOGGER.debug("setup(): API call [4 request(s)]: client.__init__()...")
 
     try:
-        # there's a bug in evohomeclient2 v0.2.7: the client.__init__() sets
-        # the root loglevel (debug=?), so must remember it now...
+        # There's a bug in evohomeclient2 v0.2.7: the client.__init__() sets
+        # the root loglevel when EvohomeClient(debug=?), so remember it now...
         log_level = logging.getLogger().getEffectiveLevel()
 
         client = EvohomeClient(
-            domain_data['params'][CONF_USERNAME],
-            domain_data['params'][CONF_PASSWORD],
+            evo_data['params'][CONF_USERNAME],
+            evo_data['params'][CONF_PASSWORD],
             debug=False
         )
         # ...then restore the it to what it was before instantiating the client
         logging.getLogger().setLevel(log_level)
 
-    except requests.RequestException as err:
+#   except requests.RequestException as err:
 #   except requests.exceptions.ConnectionError as err:
 #   except requests.exceptions.HTTPError as err:
-        if str(HTTP_BAD_REQUEST) in str(err):
-            # this happens when bad user credentials are supplied
+    except HTTPError as err:
+        if err.response.status_code == HTTP_BAD_REQUEST:
             _LOGGER.error(
                 "Failed to establish a connection with evohome web servers, "
                 "Check your username (%s), and password are correct."
                 "Unable to continue. Resolve any errors and restart HA.",
-                domain_data['params'][CONF_USERNAME]
+                evo_data['params'][CONF_USERNAME]
             )
-        else:
-            # back off and try again later
-            raise PlatformNotReady(err)
+            return False  # unable to continue
 
-    finally:  # redact username, password as no longer needed
-        del domain_data['params'][CONF_USERNAME]  # = 'REDACTED'
-        del domain_data['params'][CONF_PASSWORD]  # = 'REDACTED'
+        raise  # we dont handle any other HTTPErrors
 
-    domain_data['client'] = client
+    finally:  # Redact username, password as no longer needed.
+        evo_data['params'][CONF_USERNAME] = 'REDACTED'
+        evo_data['params'][CONF_PASSWORD] = 'REDACTED'
 
+    evo_data['client'] = client
 
-# 3. REDACT any installation data we'll never need
+    # Redact any installation data we'll never need.
     if client.installation_info[0]['locationInfo']['locationId'] != 'REDACTED':
         for loc in client.installation_info:
-#           loc['locationInfo']['locationId'] = 'REDACTED'
             loc['locationInfo']['streetAddress'] = 'REDACTED'
             loc['locationInfo']['city'] = 'REDACTED'
             loc['locationInfo']['locationOwner'] = 'REDACTED'
             loc[GWS][0]['gatewayInfo'] = 'REDACTED'
 
-# 3a.
-    loc_idx = domain_data['params'][CONF_LOCATION_IDX]
+    # Pull down the installation configuration.
+    loc_idx = evo_data['params'][CONF_LOCATION_IDX]
 
     try:
-        domain_data['config'] = client.installation_info[loc_idx]
+        evo_data['config'] = client.installation_info[loc_idx]
 
-    # IndexError: configured location index is outside the range this login
     except IndexError:
         _LOGGER.warning(
-            "setup(): Config parameter, '%s'= %s , is out of range (0-%s), "
-            "continuing with '%s' = 0.",
+            "setup(): Parameter '%s' = %s , is outside its range (0-%s)",
             CONF_LOCATION_IDX,
             loc_idx,
-            len(client.installation_info) - 1,
-            CONF_LOCATION_IDX
+            len(client.installation_info) - 1
         )
 
-        domain_data['params'][CONF_LOCATION_IDX] = 0
-        domain_data['config'] = client.installation_info[0]
+        return False  # unable to continue
 
-    domain_data['status'] = {}
+    evo_data['status'] = {}
 
-    if domain_data['params'][CONF_USE_HEURISTICS]:
+    if evo_data['params'][CONF_USE_HEURISTICS]:
         _LOGGER.warning(
             "setup(): '%s' = True. This feature is best efforts, and may "
-            "return incorrect state data, especially with '%s' < 180.",
-            CONF_USE_HEURISTICS,
-            CONF_SCAN_INTERVAL
+            "return incorrect state data.",
+            CONF_USE_HEURISTICS
         )
 
-# 3. Finished - do we need to output debgging info? If so...
-    if _LOGGER.isEnabledFor(logging.DEBUG):
+    if _LOGGER.isEnabledFor(logging.DEBUG):                                     # ZX: fixme, noqa:E501
         _LOGGER.debug(
-            "setup(): Location/TCS (temp. control system) used is: %s [%s]",
-            domain_data['config'][GWS][0][TCS][0]['systemId'],
-            domain_data['config']['locationInfo']['name']
+            "setup(): The location (temperature control system) "
+            "used is: %s [%s] (%s [%s])",
+            evo_data['config']['locationInfo']['locationId'],
+            evo_data['config']['locationInfo']['name'],
+            evo_data['config'][GWS][0][TCS][0]['systemId'],
+            evo_data['config'][GWS][0][TCS][0]['modelType']
         )
-        # Some of this data needs further redaction before being logged
-        tmp = dict(domain_data['config'])
-        tmp['locationInfo']['postcode'] = 'REDACTED'
-
-#       _LOGGER.debug("setup(): domain_data['config']: %s", tmp)
+        # Some of this data needs further redaction before being logged         # ZX: deleteme, noqa:E501
+        tmp = dict(evo_data['config'])  # further redact before logging      # ZX: deleteme, noqa:E501
+        tmp['locationInfo']['postcode'] = 'REDACTED'                            # ZX: deleteme, noqa:E501
+                                                                                # ZX: deleteme, noqa:E501
+#       _LOGGER.warn("setup(): evo_data['config']: %s", tmp)                # ZX: deleteme, noqa:E501
 
 
 # Now we're ready to go, but we have no state as yet, so...
@@ -345,7 +335,7 @@ class EvoEntity(Entity):                                                        
         # set the usual object references
         self.hass = hass
         self.client = client
-        domain_data = hass.data[DATA_EVOHOME]
+        evo_data = hass.data[DATA_EVOHOME]
 
 
         # set the entity's own object reference & identifier
@@ -356,11 +346,11 @@ class EvoEntity(Entity):                                                        
 
 
         # set the entity's configuration shortcut (considered static)
-        temperature_control_system = domain_data['config'][GWS][0][TCS][0]
+        temperature_control_system = evo_data['config'][GWS][0][TCS][0]
 
         if self._type & EVO_MASTER:
             self._config = temperature_control_system
-#           self._config = domain_data['config']
+#           self._config = evo_data['config']
 
         elif self._type & EVO_ZONE:
             for _zone in temperature_control_system['zones']:
@@ -371,12 +361,12 @@ class EvoEntity(Entity):                                                        
         elif self._type & EVO_DHW:
             self._config = temperature_control_system['dhw']
 
-        self._params = domain_data['params']
+        self._params = evo_data['params']
 
 
         # set the entity's name & icon (treated as static vales)
         if self._type & EVO_MASTER:
-            self._name = "_" + domain_data['config']['locationInfo']['name']
+            self._name = "_" + evo_data['config']['locationInfo']['name']
             self._icon = "mdi:thermostat"
 
         elif self._type & EVO_ZONE:
@@ -409,15 +399,7 @@ class EvoEntity(Entity):                                                        
         # set the entity's operation list (hard-coded for a particular order)
         if self._type & EVO_MASTER:
             # self._config['allowedSystemModes']
-            self._op_list = [
-                EVO_RESET,
-                EVO_AUTO,
-                EVO_AUTOECO,
-                EVO_AWAY,
-                EVO_DAYOFF,
-                EVO_CUSTOM,
-                EVO_HEATOFF
-            ]
+            self._op_list = TCS_MODES
 
         elif self._type & EVO_SLAVE:
             # self._config['setpointCapabilities']['allowedSetpointModes']
@@ -426,18 +408,18 @@ class EvoEntity(Entity):                                                        
 
         # create timers, etc. here, but they're maintained in update(), schedule()
         self._status = {}
-        self._timers = domain_data['timers']
+        self._timers = evo_data['timers']
 
         if self._type & EVO_MASTER:
             self._timers['statusUpdated'] = datetime.min
             # master is created before any slave
-            domain_data['schedules'] = {}
+            evo_data['schedules'] = {}
 
         elif self._type & EVO_SLAVE:
             # slaves update their schedules themselves
-            domain_data['schedules'][self._id] = {}
+            evo_data['schedules'][self._id] = {}
 
-            self._schedule = domain_data['schedules'][self._id]
+            self._schedule = evo_data['schedules'][self._id]
             self._schedule['updated'] = datetime.min
 
 
@@ -447,14 +429,14 @@ class EvoEntity(Entity):                                                        
 
 
         # create a listener for (internal) update packets...
-        hass.helpers.dispatcher.async_dispatcher_connect(
+        hass.helpers.dispatcher.dispatcher_connect(
             DISPATCHER_EVOHOME,
             self._connect
-        )  # for: def async_dispatcher_connect(signal, target)
+        )  # for: def dispatcher_connect(signal, target)
 
     def _handle_exception(self, err_hint, err_text):
 
-        domain_data = self.hass.data[DATA_EVOHOME]
+        evo_data = self.hass.data[DATA_EVOHOME]
         do_backoff = False
 
 # 1/3: evohomeclient1 (<=0.2.7) does not have a requests exceptions handler:
@@ -478,8 +460,8 @@ class EvoEntity(Entity):                                                        
 # 2/3: evohomeclient2 now (>=0.2.7) exposes requests exceptions, e.g.:
 # - "Connection reset by peer"
 # - "Max retries exceeded with url", caused by "Connection timed out"
-        elif err_hint == "ConnectionError":  # seems common with evohome
-            can_handle_this_exception = False
+#       elif err_hint == "ConnectionError":  # seems common with evohome
+#           can_handle_this_exception = False
 
 
 # 3/3: evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
@@ -487,12 +469,12 @@ class EvoEntity(Entity):                                                        
 # - "429 Client Error: Too Many Requests for url" (api usuage limit exceeded)
 # - "503 Client Error: Service Unavailable for url" (e.g. website down)
         elif err_hint == "HTTPError":
-            if str(HTTP_TOO_MANY_REQUESTS) in err_text:
+            if err.response.status_code == HTTP_TOO_MANY_REQUESTS:
                 # v2 api limit has been exceeded
                 do_backoff = True
                 debug_code = "v2"
 
-            elif str(HTTP_SERVICE_UNAVAILABLE) in err_text:
+            elif err.response.status_code == HTTP_SERVICE_UNAVAILABLE:
                 # this appears to be common with Honeywell servers
                 can_handle_this_exception = False
 
@@ -771,11 +753,11 @@ class EvoController(EvoEntity, ClimateDevice):
         'HeatingOff' doesn't turn off heating, instead: it simply sets
         setpoints to a minimum value (i.e. FrostProtect mode).
         """
-#       domain_data = self.hass.data[DATA_EVOHOME]
+#       evo_data = self.hass.data[DATA_EVOHOME]
 
 # At the start, the first thing to do is stop polled updates() until after
 # set_operation_mode() has been called/effected
-#       domain_data['lastUpdated'] = datetime.now()
+#       evo_data['lastUpdated'] = datetime.now()
         self._should_poll = False
 
         _LOGGER.debug(
@@ -799,7 +781,7 @@ class EvoController(EvoEntity, ClimateDevice):
 # self._obj._set_status(mode)
             try:
                 self._obj._set_status(operation_mode)                           # noqa: E501; pylint: disable=protected-access
-            except requests.exceptions.HTTPError as err:
+            except HTTPError as err:
                 if not self._handle_exception("HTTPError", str(err)):
                     raise
 
@@ -812,7 +794,7 @@ class EvoController(EvoEntity, ClimateDevice):
                     operation_mode
                     )
                 self._status['systemModeStatus']['mode'] = operation_mode
-                self.async_schedule_update_ha_state(force_refresh=False)
+                self.schedule_update_ha_state(force_refresh=False)
         else:
             raise NotImplementedError()
 
@@ -895,8 +877,8 @@ class EvoController(EvoEntity, ClimateDevice):
         _LOGGER.debug("turn_away_mode_off(%s)", self._id)
         self.set_operation_mode(EVO_AUTO)
 
-    def _update_state_data(self, domain_data):
-        client = domain_data['client']
+    def _update_state_data(self, evo_data):
+        client = evo_data['client']
         loc_idx = self._params[CONF_LOCATION_IDX]
 
     # 1. Obtain latest state data (e.g. temps)...
@@ -911,10 +893,10 @@ class EvoController(EvoEntity, ClimateDevice):
         )
 
         try:
-            domain_data['status'].update(  # or: domain_data['status'] =
+            evo_data['status'].update(  # or: evo_data['status'] =
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
 
-        except requests.exceptions.HTTPError as err:
+        except HTTPError as err:
             if not self._handle_exception("HTTPError", str(err)):
                 raise
 
@@ -923,10 +905,10 @@ class EvoController(EvoEntity, ClimateDevice):
             self._timers['statusUpdated'] = datetime.now()
 
         _LOGGER.debug(
-            "_update_state_data(): domain_data['status'] = %s",
-            domain_data['status']
+            "_update_state_data(): evo_data['status'] = %s",
+            evo_data['status']
         )
-        _LOGGER.debug("self._timers = %s, domain_data['timers'] = %s", self._timers, domain_data['timers'])
+        _LOGGER.debug("self._timers = %s, evo_data['timers'] = %s", self._timers, evo_data['timers'])
 
     # 2. AFTER obtaining state data, do we need to increase precision of temps?
         if self._params[CONF_HIGH_PRECISION] and \
@@ -977,7 +959,7 @@ class EvoController(EvoEntity, ClimateDevice):
                     del dhw_v1['setpoint']
                     del dhw_v1['thermostat']
 
-                    dhw_v2 = domain_data['status']['dhw']
+                    dhw_v2 = evo_data['status']['dhw']
                     dhw_v2.update(dhw_v1)  # more like a merge
 
     # now, prepare the v1 zones to merge into the v2 zones
@@ -986,7 +968,7 @@ class EvoController(EvoEntity, ClimateDevice):
                     zone['apiV1Status']['setpoint'] = zone.pop('setpoint')
                     del zone['thermostat']
 
-                org_dict_list = domain_data['status']['zones']
+                org_dict_list = evo_data['status']['zones']
 
                 _LOGGER.debug(
                     "_update_state_data(): org_dict_list = %s",
@@ -1001,7 +983,7 @@ class EvoController(EvoEntity, ClimateDevice):
                 for i, j in zip(org_dict_list, new_dict_list):
                     i.update(j)
 
-            except TypeError:
+            except TypeError as err:
                 _LOGGER.warning(
                     "Failed to obtain higher-precision temperatures "
                     "via the v1 api.  Continuing with v2 temps for now."
@@ -1018,8 +1000,8 @@ class EvoController(EvoEntity, ClimateDevice):
                 #   raise  # no raise for TypeError
 
         _LOGGER.debug(
-            "_update_state_data(): domain_data['status'] = %s",
-            domain_data['status']
+            "_update_state_data(): evo_data['status'] = %s",
+            evo_data['status']
         )
 
     def update(self):
@@ -1031,7 +1013,7 @@ class EvoController(EvoEntity, ClimateDevice):
 
         This is not asyncio-friendly due to the underlying client api.
         """
-        domain_data = self.hass.data[DATA_EVOHOME]
+        evo_data = self.hass.data[DATA_EVOHOME]
 #       self._should_poll = True
 
         # Wait a minimum (scan_interval/60) mins (rounded up) between updates
@@ -1044,8 +1026,8 @@ class EvoController(EvoEntity, ClimateDevice):
 
 # it is time to update state data
 # NB: unlike all other config/state data, zones maintain their own schedules
-        self._update_state_data(domain_data)
-        self._status = domain_data['status']
+        self._update_state_data(evo_data)
+        self._status = evo_data['status']
 
         if _LOGGER.isEnabledFor(logging.DEBUG):
             status = dict(self._status)  # create a copy since we're editing
@@ -1077,7 +1059,7 @@ class EvoController(EvoEntity, ClimateDevice):
         """Return the average target temperature of the Heating/DHW zones."""
         temps = [zone['setpointStatus']['targetHeatTemperature']
                  for zone in self._status['zones']]
-        avg_temp = sum(temps) / len(temps) if temps else None
+        avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
         _LOGGER.warn("target_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
@@ -1089,7 +1071,7 @@ class EvoController(EvoEntity, ClimateDevice):
                     if x['temperatureStatus']['isAvailable'] is True]
 
         temps = [zone['temperatureStatus']['temperature'] for zone in tmp_dict]
-        avg_temp = sum(temps) / len(temps) if temps else None
+        avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
         _LOGGER.warn("current_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
@@ -1258,17 +1240,17 @@ class EvoSlaveEntity(EvoEntity):
 # 4. controller to send response back to web server
 # 5. we make next client api call (every scan_interval)
 # ... in between 1. & 5., should assumed_state/available/other be True/False?
-        domain_data = self.hass.data[DATA_EVOHOME]
+        evo_data = self.hass.data[DATA_EVOHOME]
 
 # Part 1: state - create pointers to state as retrieved by the controller
         if self._type & EVO_ZONE:
-            for _zone in domain_data['status']['zones']:
+            for _zone in evo_data['status']['zones']:
                 if _zone['zoneId'] == self._id:
                     self._status = _zone
                     break
 
         elif self._type & EVO_DHW:
-            self._status = domain_data['status']['dhw']
+            self._status = evo_data['status']['dhw']
 
         _LOGGER.debug(
             "update(%s), self._status = %s",
@@ -1278,7 +1260,7 @@ class EvoSlaveEntity(EvoEntity):
 
 # Part 2: schedule - retrieved here as required
         if self._params[CONF_USE_SCHEDULES]:
-            self._schedule = domain_data['schedules'][self._id]
+            self._schedule = evo_data['schedules'][self._id]
 
             # Use cached schedule if < 60 mins old
             timeout = datetime.now() + timedelta(seconds=59)
@@ -1302,7 +1284,7 @@ class EvoSlaveEntity(EvoEntity):
 
                 try:
                     self._schedule['schedule'] = self._obj.schedule()
-                except requests.exceptions.HTTPError as err:
+                except HTTPError as err:
                     if not self._handle_exception("HTTPError", str(err)):
                         raise
                 else:
@@ -1334,9 +1316,9 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         """
 # When Zone is 'Off' & TCS == Away: Zone = TempOver/5C
 # When Zone is 'Follow' & TCS = Away: Zone = Follow/15C
-        domain_data = self.hass.data[DATA_EVOHOME]
+        evo_data = self.hass.data[DATA_EVOHOME]
 
-        tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
+        tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
         zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
 
         # If possible, use inheritance to override reported state
@@ -1430,7 +1412,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
         try:
             self._obj.set_temperature(temperature)
 
-        except requests.exceptions.HTTPError as err:
+        except HTTPError as err:
             if not self._handle_exception("HTTPError", str(err)):
                 raise
 
@@ -1543,7 +1525,7 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
             try:
                 self._obj.cancel_temp_override(self._obj)
 
-            except requests.exceptions.HTTPError as err:
+            except HTTPError as err:
                 if not self._handle_exception("HTTPError", str(err)):
                     raise
 
@@ -1638,14 +1620,14 @@ class EvoZone(EvoSlaveEntity, ClimateDevice):
 # If a TRV is set to 'Off' via it's own controls, it shows up in the client api
 # as 'TemporaryOverride' (not 'PermanentOverride'!), setpoint = min, until next
 # switchpoint.  If you change the controller mode, then
-        domain_data = self.hass.data[DATA_EVOHOME]
+        evo_data = self.hass.data[DATA_EVOHOME]
 
         temp = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
 
         if self._params[CONF_USE_HEURISTICS] and \
                 self._params[CONF_USE_SCHEDULES]:
 
-            tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
+            tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
             zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
 
             if tcs_op_mode == EVO_CUSTOM:
@@ -1772,7 +1754,7 @@ class EvoBoiler(EvoSlaveEntity):
         try:
             self._obj._set_dhw(data)                                            # noqa: E501; pylint: disable=protected-access
 
-        except requests.exceptions.HTTPError as err:
+        except HTTPError as err:
             if not self._handle_exception("HTTPError", str(err)):
                 raise
 
@@ -1790,9 +1772,9 @@ class EvoBoiler(EvoSlaveEntity):
           - Off, current temp is ignored
           - Away, Off regardless of scheduled state
         """
-        domain_data = self.hass.data[DATA_EVOHOME]
+        evo_data = self.hass.data[DATA_EVOHOME]
 
-        tcs_op_mode = domain_data['status']['systemModeStatus']['mode']
+        tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
         dhw_op_mode = self._status['stateStatus']['mode']
 
         # Determine the reported state

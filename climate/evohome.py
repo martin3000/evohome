@@ -29,10 +29,10 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
     Here, we add the controller, and the zones (if there are any).
     """
-    domain_data = hass.data[DATA_EVOHOME]
+    evo_data = hass.data[DATA_EVOHOME]
 
-    client = domain_data['client']
-    loc_idx = domain_data['params'][CONF_LOCATION_IDX]
+    client = evo_data['client']
+    loc_idx = evo_data['params'][CONF_LOCATION_IDX]
 
 # 1/3: Collect the (master) controller - evohomeclient has no defined way of
 # accessing non-default location other than using the protected member
