@@ -317,8 +317,8 @@ def setup(hass, config):
 # ... then finally, load the platform...
 #   for component in ('camera', 'vacuum', 'switch'):
 #       discovery.load_platform(hass, component, DOMAIN, {}, config)
-    load_platform(hass, 'climate', DOMAIN)
-#   load_platform(hass, 'boiler', DOMAIN)
+    load_platform(hass, 'climate', DOMAIN, {}, config)
+#   load_platform(hass, 'boiler', DOMAIN, {}, config)
 
     return True
 
