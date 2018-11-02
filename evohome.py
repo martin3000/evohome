@@ -58,6 +58,14 @@ from homeassistant.components.climate import (
     ATTR_AWAY_MODE,
 )
 
+from homeassistant.components.water_heater import (
+    WaterHeaterDevice,
+    
+    SUPPORT_TARGET_TEMPERATURE,
+    SUPPORT_AWAY_MODE,
+    SUPPORT_OPERATION_MODE
+)
+
 from homeassistant.const import (
     ATTR_TEMPERATURE,
     CONF_USERNAME,
@@ -75,12 +83,14 @@ from homeassistant.const import (
     TEMP_CELSIUS,
 
     HTTP_BAD_REQUEST,
+    HTTP_TOO_MANY_REQUESTS,
+    HTTP_SERVICE_UNAVAILABLE,
 )
 
 # These are HTTP codes commonly seen with this component
 #   HTTP_BAD_REQUEST = 400          # usually, bad user credentials
-HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
-HTTP_SERVICE_UNAVAILABLE = 503  # this is common with Honeywell's websites
+#   HTTP_TOO_MANY_REQUESTS = 429    # usually, api limit exceeded
+#   HTTP_SERVICE_UNAVAILABLE = 503  # sadly, common with Honeywell's websites
 
 from homeassistant.core import callback
 from homeassistant.exceptions import PlatformNotReady
@@ -106,6 +116,7 @@ DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
 MIN_TEMP = 5
 MAX_TEMP = 35
 MIN_SCAN_INTERVAL = 180
+DEFAULT_SCAN_INTERVAL = 300
 
 CONF_HIGH_PRECISION = 'high_precision'
 CONF_USE_HEURISTICS = 'use_heuristics'
@@ -114,20 +125,11 @@ CONF_LOCATION_IDX = 'location_idx'
 CONF_AWAY_TEMP = 'away_temp'
 CONF_OFF_TEMP = 'off_temp'
 
-# DELETEME
-API_VER = '0.2.7'  # alternatively, '0.2.5' is the version used elsewhere in HA
-
-if API_VER == '0.2.7':  # these vars for >=0.2.6 (is it v3 of the api?)...
-#   REQUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']
-    REQUIREMENTS = ['evohomeclient==0.2.7']
-    SETPOINT_CAPABILITIES = 'setpointCapabilities'
-    SETPOINT_STATE = 'setpointStatus'
-    TARGET_TEMPERATURE = 'targetHeatTemperature'
-else:  # these vars for <=0.2.5...
-    REQUIREMENTS = ['evohomeclient==0.2.5']
-    SETPOINT_CAPABILITIES = 'heatSetpointCapabilities'
-    SETPOINT_STATE = 'heatSetpointStatus'
-    TARGET_TEMPERATURE = 'targetTemperature'
+#EQUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']
+REQUIREMENTS = ['evohomeclient==0.2.7']
+SETPOINT_CAPABILITIES = 'setpointCapabilities'
+SETPOINT_STATE = 'setpointStatus'
+TARGET_TEMPERATURE = 'targetHeatTemperature'
 
 # Validation of the user's configuration.
 CV_FLOAT = vol.All(vol.Coerce(float), vol.Range(min=MIN_TEMP, max=MAX_TEMP))
@@ -137,7 +139,7 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Required(CONF_USERNAME): cv.string,
         vol.Required(CONF_PASSWORD): cv.string,
         vol.Optional(CONF_SCAN_INTERVAL,
-                     default=MIN_SCAN_INTERVAL): cv.positive_int,
+                     default=DEFAULT_SCAN_INTERVAL): cv.positive_int,
 
         vol.Optional(CONF_HIGH_PRECISION, default=True): cv.boolean,
         vol.Optional(CONF_USE_HEURISTICS, default=False): cv.boolean,
@@ -190,16 +192,18 @@ DHW_STATES = {STATE_ON: 'On', STATE_OFF: 'Off'}
 
 
 def setup(hass, config):
-    """Create a Honeywell (EMEA/EU) evohome CH/DHW system.
+    """Setup the Honeywell (EMEA/EU) evohome CH/DHW Components.
 
     One controller with 0+ heating zones (e.g. TRVs, relays) and, optionally, a
     DHW controller.  Does not work for US-based systems.
     """
+    from evohomeclient2 import EvohomeClient
+
     evo_data = hass.data[DATA_EVOHOME] = {}
     evo_data['timers'] = {}
 
     evo_data['params'] = dict(config[DOMAIN])
-    # scan_interval - rounded up to nearest 60 secz
+    # scan_interval - rounded up to nearest 60 seconds
     evo_data['params'][CONF_SCAN_INTERVAL] \
         = (int((config[DOMAIN][CONF_SCAN_INTERVAL] - 1) / 60) + 1) * 60
 
@@ -210,16 +214,13 @@ def setup(hass, config):
 
         _LOGGER.debug("setup(): Configuration parameters: %s", tmp)
 
-    from evohomeclient2 import EvohomeClient
-
     _LOGGER.debug("setup(): API call [4 request(s)]: client.__init__()...")
-
     try:
         # There's a bug in evohomeclient2 v0.2.7: the client.__init__() sets
         # the root loglevel when EvohomeClient(debug=?), so remember it now...
         log_level = logging.getLogger().getEffectiveLevel()
 
-        client = EvohomeClient(
+        client = evo_data['client'] = EvohomeClient(
             evo_data['params'][CONF_USERNAME],
             evo_data['params'][CONF_PASSWORD],
             debug=False
@@ -240,13 +241,17 @@ def setup(hass, config):
             )
             return False  # unable to continue
 
+        elif err.response.status_code == HTTP_TOO_MANY_REQUESTS:
+            _LOGGER.error(
+                "TOO MANY REQUESTS"
+            )
+            return False  # unable to continue
+
         raise  # we dont handle any other HTTPErrors
 
     finally:  # Redact username, password as no longer needed.
         evo_data['params'][CONF_USERNAME] = 'REDACTED'
         evo_data['params'][CONF_PASSWORD] = 'REDACTED'
-
-    evo_data['client'] = client
 
     # Redact any installation data we'll never need.
     if client.installation_info[0]['locationInfo']['locationId'] != 'REDACTED':
@@ -314,18 +319,58 @@ def setup(hass, config):
 # create a listener for the above...
     hass.bus.listen(EVENT_HOMEASSISTANT_START, _first_update)
 
-# ... then finally, load the platform...
-#   for component in ('camera', 'vacuum', 'switch'):
-#       discovery.load_platform(hass, component, DOMAIN, {}, config)
+
+# 1/3: Collect the (parent) controller
+# api has no way of accessing non-default location except as protected member
+    tcs_obj_ref = client.locations[loc_idx]._gateways[0]._control_systems[0]
+
+    _LOGGER.info(
+        "setup_platform(): Found Controller, id: %s, type: %s, idx=%s, loc=%s",
+        tcs_obj_ref.systemId + " [" + tcs_obj_ref.location.name + "]",
+        tcs_obj_ref.modelType,
+        loc_idx,
+        tcs_obj_ref.location.locationId,
+    )
+    parent = EvoController(hass, client, tcs_obj_ref)
+    parent._zones = zones = []
+    parent._dhw = dhw = {}
+
+# 2/3: Collect each (child) Heating zone as a climate component
+    for zone_obj_ref in tcs_obj_ref._zones:                                     # noqa E501; pylint: disable=protected-access
+        _LOGGER.info(
+            "setup_platform(): Found Zone device, id: %s, type: %s",
+            zone_obj_ref.zoneId + " [" + zone_obj_ref.name + "]",
+            zone_obj_ref.zone_type  # also has .zoneType (different)
+        )
+
+        zones.append(EvoZone(hass, client, zone_obj_ref))
+        
+        evo_data['parent'] = parent
+        evo_data['zones'] = zones
+
     load_platform(hass, 'climate', DOMAIN, {}, config)
-#   load_platform(hass, 'boiler', DOMAIN, {}, config)
+
+# 3/3: Collect any (child) DHW controller as a water_heater component
+    if tcs_obj_ref.hotwater:
+        _LOGGER.info(
+            "setup_platform(): Found DHW device, id: %s, type: %s",
+            tcs_obj_ref.hotwater.zoneId,  # same has .dhwId
+            tcs_obj_ref.hotwater.zone_type
+        )
+        dhw = EvoBoiler(hass, client, tcs_obj_ref.hotwater)
+        evo_data['dhw'] = dhw
+
+
+        load_platform(hass, 'water_heater', DOMAIN, {}, config)
+
+    parent._children = zones + [dhw]
 
     return True
 
 
-class EvoEntity(Entity):                                                        # noqa: D204,E501
+class EvoEntity(Entity):
     """Base for Honeywell evohome child devices (Heating/DHW zones)."""
-                                                                                # noqa: E116,E501; pylint: disable=no-member
+
     def __init__(self, hass, client, obj_ref):
         """Initialize the evohome entity.
 
@@ -508,7 +553,8 @@ class EvoEntity(Entity):                                                        
     @callback
     def _connect(self, packet):
         """Process a dispatcher connect."""
-#       _LOGGER.debug("_connect(%s): got packet %s", self._id, packet)
+        _LOGGER.debug("_connect(%s): got packet %s", self._id, packet)
+        _LOGGER.warning("_connect(%s): packet['to'] & self._type = %s", self._id, bool(packet['to'] & self._type))
 
         if packet['to'] & self._type:
             if packet['signal'] == 'update':
@@ -1047,6 +1093,7 @@ class EvoController(EvoEntity, ClimateDevice):
             'signal': 'update',
             'to': EVO_CHILD
         }
+
         self.hass.helpers.dispatcher.async_dispatcher_send(
             DISPATCHER_EVOHOME,
             pkt
@@ -1701,8 +1748,15 @@ class EvoZone(EvoChildEntity, ClimateDevice):
         return step
 
 
-class EvoBoiler(EvoChildEntity):
+class EvoBoiler(EvoChildEntity, WaterHeaterDevice):
     """Base for a Honeywell evohome DHW controller (aka boiler)."""
+
+    @property
+    def target_temperature(self):
+        """Return None, as there is no target temp exposed via the api."""
+        temp = self.current_temperature
+        _LOGGER.warn("target_temperature(%s) = %s", self._id, temp)
+        return temp
 
     def _set_dhw_state(self, state=None, mode=None, until=None):
         """Set the new state of a DHW controller.
@@ -1812,11 +1866,11 @@ class EvoBoiler(EvoChildEntity):
             _LOGGER.debug("state(%s) = %s", self._id, state)
         return state
 
-    @property
-    def unit_of_measurement(self):
-        """Return the unit of measurement of this entity, if any."""
-        # this is needed for EvoBoiler(Entity) class to show a graph of temp
-        return TEMP_CELSIUS
+#   @property
+#   def unit_of_measurement(self):
+#       """Return the unit of measurement of this entity, if any."""
+#       # this is needed for EvoBoiler(Entity) class to show a graph of temp
+#       return TEMP_CELSIUS
 
     @property
     def is_on(self):
