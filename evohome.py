@@ -60,10 +60,10 @@ from homeassistant.components.climate import (
 
 from homeassistant.components.water_heater import (
     WaterHeaterDevice,
-    
-    SUPPORT_TARGET_TEMPERATURE,
-    SUPPORT_AWAY_MODE,
-    SUPPORT_OPERATION_MODE
+
+#   SUPPORT_TARGET_TEMPERATURE,
+#   SUPPORT_AWAY_MODE,
+#   SUPPORT_OPERATION_MODE
 )
 
 from homeassistant.const import (
@@ -199,7 +199,7 @@ def setup(hass, config):
     """Setup the Honeywell (EMEA/EU) evohome CH/DHW Components.
 
     One controller with 0+ heating zones (e.g. TRVs, relays) and, optionally, a
-    DHW controller.  Does not work for US-based systems.
+    DHW controller. Does not work for US-based systems.
     """
     from evohomeclient2 import EvohomeClient
 
@@ -348,7 +348,7 @@ def setup(hass, config):
         )
 
         zones.append(EvoZone(hass, client, zone_obj_ref))
-        
+
         evo_data['parent'] = parent
         evo_data['zones'] = zones
 
@@ -378,7 +378,7 @@ class EvoEntity(Entity):
     def __init__(self, hass, client, obj_ref):
         """Initialize the evohome entity.
 
-        Most read-only properties are set here.  SOe are pseudo read-only,
+        Most read-only properties are set here. Some are pseudo read-only,
         for example name (which can change).
         """
         # set the usual object references
@@ -443,6 +443,7 @@ class EvoEntity(Entity):
             self._supported_features = \
                 SUPPORT_OPERATION_MODE | \
                 SUPPORT_ON_OFF
+            self._supported_features = 7  # a necessary hack
 
 
         # set the entity's operation list (hard-coded for a particular order)
@@ -621,7 +622,7 @@ class EvoEntity(Entity):
                 self._timers
             )
 
-        _LOGGER.debug("available(%s) = %s", self._id, self._available)
+#       _LOGGER.debug("available(%s) = %s", self._id, self._available)
         return self._available
 
     @property
@@ -647,7 +648,7 @@ class EvoEntity(Entity):
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
 #       feats = self._supported_features
-#       _LOGGER.debug("supported_features(%s) = %s", self._id, feats)
+#       _LOGGER.warn("supported_features(%s) = %s", self._id, feats)
         return self._supported_features
 
     @property
@@ -657,7 +658,7 @@ class EvoEntity(Entity):
         Note that, for evohome, the operating mode is determined by - but not
         equivalent to - the last operation (from the operation list).
         """
-#       _LOGGER.debug("operation_list(%s) = %s", self._id, self._op_list)
+#       _LOGGER.warn("operation_list(%s) = %s", self._id, self._op_list)
         return self._op_list
 
     @property
@@ -670,7 +671,7 @@ class EvoEntity(Entity):
         elif self._type & EVO_DHW:
             curr_op = self._status['stateStatus']['mode']
 
-#       _LOGGER.debug("current_operation(%s) = %s", self._id, curr_op)
+#       _LOGGER.warn("current_operation(%s) = %s", self._id, curr_op)
         return curr_op
 
     @property
@@ -698,7 +699,7 @@ class EvoEntity(Entity):
     def min_temp(self):
         """Return the minimum target temp (setpoint) of a zone.
 
-        Setpoints are 5-35C by default, but can be further limited.  Only
+        Setpoints are 5-35C by default, but can be further limited. Only
         applies to heating zones, not DHW controllers (boilers).
         """
         if self._type & EVO_PARENT:
@@ -706,7 +707,7 @@ class EvoEntity(Entity):
         elif self._type & EVO_ZONE:
             temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
         elif self._type & EVO_DHW:
-            temp = 30
+            temp = 35
 #       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
         return temp
 
@@ -714,7 +715,7 @@ class EvoEntity(Entity):
     def max_temp(self):
         """Return the maximum target temp (setpoint) of a zone.
 
-        Setpoints are 5-35C by default, but can be further limited.  Only
+        Setpoints are 5-28C by default, but can be further limited. Only
         applies to heating zones, not DHW controllers (boilers).
         """
         if self._type & EVO_PARENT:
@@ -1035,7 +1036,7 @@ class EvoController(EvoEntity, ClimateDevice):
             except TypeError as err:
                 _LOGGER.warning(
                     "Failed to obtain higher-precision temperatures "
-                    "via the v1 api.  Continuing with v2 temps for now."
+                    "via the v1 api. Continuing with v2 temps for now."
                 )
                 # Has api rate limit been exceeded?  If so, back off...
                 response = ec1_api.user_data
@@ -1245,7 +1246,7 @@ class EvoChildEntity(EvoEntity):
     def async_set_operation_mode(self, operation_mode):
         """Set a new target operation mode.
 
-        This method must be run in the event loop and returns a coroutine.  The
+        This method must be run in the event loop and returns a coroutine. The
         underlying method is not asyncio-friendly.
         """
         return self.hass.async_add_job(self.set_operation_mode, operation_mode)  # noqa: E501; pylint: disable=no-member
@@ -1650,7 +1651,7 @@ class EvoZone(EvoChildEntity, ClimateDevice):
         temperature, which would be a function of operating mode (both
         controller and zone) and, for TRVs, the OpenWindowMode feature.
 
-        Boilers do not have setpoints; they are only on or off.  Their
+        Boilers do not have setpoints; they are only on or off. Their
         (scheduled) setpoint is the same as their target temperature.
         """
         # Zones have: {'DhwState': 'On',     'TimeOfDay': '17:30:00'}
@@ -1669,7 +1670,7 @@ class EvoZone(EvoChildEntity, ClimateDevice):
         """
 # If a TRV is set to 'Off' via it's own controls, it shows up in the client api
 # as 'TemporaryOverride' (not 'PermanentOverride'!), setpoint = min, until next
-# switchpoint.  If you change the controller mode, then
+# switchpoint. If you change the controller mode, then
         evo_data = self.hass.data[DATA_EVOHOME]
 
         temp = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
@@ -1758,10 +1759,10 @@ class EvoBoiler(EvoChildEntity, WaterHeaterDevice):
     def target_temperature(self):
         """Return None, as there is no target temp exposed via the api."""
         evo_data = self.hass.data[DATA_EVOHOME]
-        
+
         temp = evo_data['params'][CONF_DHW_TEMP]
         temp = self.current_temperature  # a hack
-        
+
         _LOGGER.warn("target_temperature(%s) = %s", self._id, temp)
         return temp
 
