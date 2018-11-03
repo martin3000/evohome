@@ -1,6 +1,6 @@
 # Home Assistant Custom Component for Honeywell Evotouch
 
-_News: I am now working towards getting this component accepted into HA; this is the `custom_component` version, which I plan to keep up-to-date untill all of its functionality in accepted into HA._  As of 2018/09/20, this component does not yet exist in HA.
+_News: I am now working towards getting this component accepted into HA; this is the `custom_component` version, which I plan to keep up-to-date untill all (most?) of its functionality in accepted into HA. As of 2018/11/03, only the controller (and not the zones, DHW controller) exist as a HA component._
 
 Support for Honeywell (EU-only) Evohome installations: one controller, multiple heating zones and (optionally) a DHW controller.  It provides _much_ more functionality that the existing Honeywell climate component 
 
@@ -14,13 +14,12 @@ NB: this is _for EU-based systems only_, it will not work with US-based systems 
 
 ## Installation instructions (have recently changed)
 
-Make the following changes to your exisiting installation of HA:
- 1. Change the `REQUIREMENTS` in /components/honeywell.py to be: `'evohomeclient==0.2.7'` (instead of `0.2.5`) - this will not affect the functionality of that component (only required if you are using this component).
- 2. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git custom_components`
- 3. When required, update the git by executing: `git pull` (this git can get very frequent updates).
- 4. Edit `configuration.yaml` as below.  I recommend trying 180 seconds, and `high_precision: true` (is default), but YMMV with heuristics/schedules.
+You must be running HA v0.80.0 or later (it has an updated evohomeclient).  Make the following changes to your exisiting installation of HA:
+ 1. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git custom_components` (currently, there are 3 files to download)
+ 2. When required, update the git by executing: `git pull` (this git can get very frequent updates).
+ 3. Edit `configuration.yaml` as below.  I recommend 300 seconds, and `high_precision: true` (both are defaults). YMMV with heuristics/schedules.
  
-You will need to redo 1) only after upgrading HA to a later/earlier version.  You will need to do 2) only once.  You will need to redo 3) as often as the git is updated. You will need to do 4) only once.
+You will need to redo 1) only once if you use `git`.  You will need to redo 2) as often as the git is updated. You will need to do 3) only once.
 
 ## Configration file
 
@@ -31,8 +30,8 @@ evohome:
   password: !secret evohome_password
 
 # These config parameters are presented with their default values...
-# scan_interval: 300     # seconds, you can probably get away with 60
-# high_precision: true   # tenths (hundredths) instead of halves
+# scan_interval: 300     # seconds, you might get away with 180
+# high_precision: true   # temperature in tenths instead of halves
 # location_idx: 0        # if you have more than 1 location, use this
 
 # These config parameters are YMMV...
@@ -48,7 +47,7 @@ logger:
   logs:
     custom_components.evohome: debug
     custom_components.climate.evohome: debug
-#    evohomeclient2: warn
+#   evohomeclient2: warn
 ```
 
 ## Improvements over the existing Honeywell component
