@@ -113,10 +113,12 @@ DOMAIN = 'evohome'
 DATA_EVOHOME = 'data_' + DOMAIN
 DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
 
+DHW_TEMP = 54 # this is a guess
 MIN_TEMP = 5
 MAX_TEMP = 35
 MIN_SCAN_INTERVAL = 180
 DEFAULT_SCAN_INTERVAL = 300
+
 
 CONF_HIGH_PRECISION = 'high_precision'
 CONF_USE_HEURISTICS = 'use_heuristics'
@@ -124,6 +126,7 @@ CONF_USE_SCHEDULES = 'use_schedules'
 CONF_LOCATION_IDX = 'location_idx'
 CONF_AWAY_TEMP = 'away_temp'
 CONF_OFF_TEMP = 'off_temp'
+CONF_DHW_TEMP = 'dhw_target_temp'
 
 #EQUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']
 REQUIREMENTS = ['evohomeclient==0.2.7']
@@ -132,7 +135,8 @@ SETPOINT_STATE = 'setpointStatus'
 TARGET_TEMPERATURE = 'targetHeatTemperature'
 
 # Validation of the user's configuration.
-CV_FLOAT = vol.All(vol.Coerce(float), vol.Range(min=MIN_TEMP, max=MAX_TEMP))
+CV_FLOAT1 = vol.All(vol.Coerce(float), vol.Range(min=5, max=28))
+CV_FLOAT2 = vol.All(vol.Coerce(float), vol.Range(min=40, max=90))
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -146,11 +150,11 @@ CONFIG_SCHEMA = vol.Schema({
         vol.Optional(CONF_USE_SCHEDULES, default=False): cv.boolean,
 
         vol.Optional(CONF_LOCATION_IDX, default=0): cv.positive_int,
-        vol.Optional(CONF_AWAY_TEMP, default=15.0): CV_FLOAT,
-        vol.Optional(CONF_OFF_TEMP, default=5.0): CV_FLOAT,
+        vol.Optional(CONF_AWAY_TEMP, default=15.0): CV_FLOAT1,
+        vol.Optional(CONF_OFF_TEMP, default=5.0): CV_FLOAT1,
+        vol.Optional(CONF_DHW_TEMP, default=DHW_TEMP): CV_FLOAT2,
     }),
 }, extra=vol.ALLOW_EXTRA)
-
 
 # these are for the controller's opmode/state and the zone's state
 EVO_RESET = 'AutoWithReset'
@@ -203,9 +207,9 @@ def setup(hass, config):
     evo_data['timers'] = {}
 
     evo_data['params'] = dict(config[DOMAIN])
-    # scan_interval - rounded up to nearest 60 seconds
-    evo_data['params'][CONF_SCAN_INTERVAL] \
-        = (int((config[DOMAIN][CONF_SCAN_INTERVAL] - 1) / 60) + 1) * 60
+    # scan_interval - rounded up to nearest 60 seconds, min 180
+    tmp = (int((config[DOMAIN][CONF_SCAN_INTERVAL] - 1) / 60) + 1) * 60
+    evo_data['params'][CONF_SCAN_INTERVAL] = max(tmp, MIN_SCAN_INTERVAL)
 
     if _LOGGER.isEnabledFor(logging.DEBUG):  # then redact username, password
         tmp = dict(evo_data['params'])
@@ -325,7 +329,7 @@ def setup(hass, config):
     tcs_obj_ref = client.locations[loc_idx]._gateways[0]._control_systems[0]
 
     _LOGGER.info(
-        "setup_platform(): Found Controller, id: %s, type: %s, idx=%s, loc=%s",
+        "setup(): Found Controller, id: %s, type: %s, idx=%s, loc=%s",
         tcs_obj_ref.systemId + " [" + tcs_obj_ref.location.name + "]",
         tcs_obj_ref.modelType,
         loc_idx,
@@ -338,7 +342,7 @@ def setup(hass, config):
 # 2/3: Collect each (child) Heating zone as a climate component
     for zone_obj_ref in tcs_obj_ref._zones:                                     # noqa E501; pylint: disable=protected-access
         _LOGGER.info(
-            "setup_platform(): Found Zone device, id: %s, type: %s",
+            "setup(): Found Zone device, id: %s, type: %s",
             zone_obj_ref.zoneId + " [" + zone_obj_ref.name + "]",
             zone_obj_ref.zone_type  # also has .zoneType (different)
         )
@@ -353,7 +357,7 @@ def setup(hass, config):
 # 3/3: Collect any (child) DHW controller as a water_heater component
     if tcs_obj_ref.hotwater:
         _LOGGER.info(
-            "setup_platform(): Found DHW device, id: %s, type: %s",
+            "setup(): Found DHW device, id: %s, type: %s",
             tcs_obj_ref.hotwater.zoneId,  # same has .dhwId
             tcs_obj_ref.hotwater.zone_type
         )
@@ -1754,7 +1758,11 @@ class EvoBoiler(EvoChildEntity, WaterHeaterDevice):
     @property
     def target_temperature(self):
         """Return None, as there is no target temp exposed via the api."""
-        temp = self.current_temperature
+        evo_data = self.hass.data[DATA_EVOHOME]
+        
+        temp = evo_data['params'][CONF_DHW_TEMP]
+        temp = self.current_temperature  # a hack
+        
         _LOGGER.warn("target_temperature(%s) = %s", self._id, temp)
         return temp
 
