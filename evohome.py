@@ -692,7 +692,7 @@ class EvoEntity(Entity):
         elif self._type & EVO_DHW:
             precision = PRECISION_WHOLE
 
-        _LOGGER.debug("precision(%s) = %s", self._id, precision)
+#       _LOGGER.debug("precision(%s) = %s", self._id, precision)
         return precision
 
     @property
@@ -708,7 +708,7 @@ class EvoEntity(Entity):
             temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 30
-        _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
+#       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
         return temp
 
     @property
@@ -724,7 +724,7 @@ class EvoEntity(Entity):
             temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 85
-        _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
+#       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
         return temp
 
 
