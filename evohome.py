@@ -136,7 +136,7 @@ TARGET_TEMPERATURE = 'targetHeatTemperature'
 
 # Validation of the user's configuration.
 CV_FLOAT1 = vol.All(vol.Coerce(float), vol.Range(min=5, max=28))
-CV_FLOAT2 = vol.All(vol.Coerce(float), vol.Range(min=40, max=90))
+CV_FLOAT2 = vol.All(vol.Coerce(float), vol.Range(min=35, max=85))
 
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
@@ -557,8 +557,7 @@ class EvoEntity(Entity):
     @callback
     def _connect(self, packet):
         """Process a dispatcher connect."""
-        _LOGGER.debug("_connect(%s): got packet %s", self._id, packet)
-        _LOGGER.warning("_connect(%s): packet['to'] & self._type = %s", self._id, bool(packet['to'] & self._type))
+#       _LOGGER.debug("_connect(%s): got packet %s", self._id, packet)
 
         if packet['to'] & self._type:
             if packet['signal'] == 'update':
@@ -684,7 +683,7 @@ class EvoEntity(Entity):
     def precision(self):
         """Return the temperature precision to use in the frontend UI."""
         if self._params[CONF_HIGH_PRECISION]:
-            precision = PRECISION_TENTHS  # and is actually 0.01 for zones!
+            precision = PRECISION_TENTHS  # and is actually 0.01!
         elif self._type & EVO_PARENT:
             precision = PRECISION_HALVES
         elif self._type & EVO_ZONE:
