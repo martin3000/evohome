@@ -29,7 +29,14 @@ b) you see only the controller: installation is invalid and HA is using the buil
 
 ### Troubleshooting
 
-Try the following:
+Execute this command: `cat home-assistant.log | grep custom | head`, and you should expect to see the following warning, `You are using a custom component for evohome`:
+```
+2018-11-06 16:30:33 WARNING (MainThread) [homeassistant.loader] You are using a custom component for evohome which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you do experience issues with Home Assistant.
+```
+
+If you don't see this, then something is wrong with your `custom_components` folder.
+
+Regardless of that you can also try the following:
   `cat home-assistant.log | grep evohome | grep ERROR`, and/or
   `cat home-assistant.log | grep evohome | grep WARN`, and/or
   `cat home-assistant.log | grep evohome | grep Found`
