@@ -1,10 +1,10 @@
 # Home Assistant Custom Component for Honeywell Evotouch
 
-_News: I am now working towards getting this component accepted into HA; this is the `custom_component` version, which I plan to keep up-to-date untill all (most?) of its functionality in accepted into HA. As of 2018/11/03, only the controller (and not the zones, DHW controller) exist as a HA component._
+_News: I am now working towards getting this component accepted into HA; this is the `custom_component` version, which I plan to keep up-to-date until all (most?) of its functionality in accepted into HA. As of 2018/11/12, only the controller (and not the zones, DHW controller) exist as a HA component._
 
 Support for Honeywell (EU-only) Evohome installations: one controller, multiple heating zones and (optionally) a DHW controller.  It provides _much_ more functionality that the existing Honeywell climate component 
 
-You _could_ run it alongside the existing `honeywell.py` component (why would you want to?), but you have to edit `honeywell.py`.
+You _could_ run it alongside the existing `honeywell.py` component (why woudl you want to?). To run it in tandem with the builtin `evohome.py`componenet, youd'd have to change its name (instructions here: https://github.com/zxdavb/evohome/issues/10).  
 
 Includes support for those of you with multiple locations.  Use can choose _which_ location with `location_idx:`, and you can even have multiple concurrent locations with the following work-around: https://github.com/zxdavb/evohome/issues/10
 
@@ -12,7 +12,7 @@ NB: this is _for EU-based systems only_, it will not work with US-based systems 
 
 -DAVB
 
-## Installation instructions (have recently changed)
+## Installation instructions
 
 You must be running HA v0.80.0 or later (it has an updated evohomeclient).  Make the following changes to your exisiting installation of HA:
  1. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git custom_components` (currently, there are 3 files to download)
@@ -20,6 +20,19 @@ You must be running HA v0.80.0 or later (it has an updated evohomeclient).  Make
  3. Edit `configuration.yaml` as below.  I recommend 300 seconds, and `high_precision: true` (both are defaults). YMMV with heuristics/schedules.
  
 You will need to redo 1) only once if you use `git`.  You will need to redo 2) as often as the git is updated. You will need to do 3) only once.
+
+### Post-Installation checklist
+
+The system shoudl start, and show: the Controller, your Zones, and your DHW (if any).  If there is a problem, either
+a) you see nothing: first check your `configutation.yaml` - start with only username & password & go from there
+b) you see only the controller: installation is invalid and HA is using the builtin component, try the instructions here: https://community.home-assistant.io/t/refactored-honeywell-evohome-custom-component-eu-only/59733/182
+
+### Troubleshooting
+
+Try: 
+  `cat home-assistant.log | grep evohome | grep ERROR`
+  `cat home-assistant.log | grep evohome | grep WARN`
+  `cat home-assistant.log | grep evohome | grep Found`
 
 ## Configration file
 
