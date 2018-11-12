@@ -29,9 +29,9 @@ b) you see only the controller: installation is invalid and HA is using the buil
 
 ### Troubleshooting
 
-Try: 
-  `cat home-assistant.log | grep evohome | grep ERROR`
-  `cat home-assistant.log | grep evohome | grep WARN`
+Try the following:
+  `cat home-assistant.log | grep evohome | grep ERROR`, and/or
+  `cat home-assistant.log | grep evohome | grep WARN`, and/or
   `cat home-assistant.log | grep evohome | grep Found`
 
 ## Configration file
