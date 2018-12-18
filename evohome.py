@@ -484,10 +484,12 @@ class EvoEntity(Entity):
             self._connect
         )  # for: def dispatcher_connect(signal, target)
 
-    def _handle_exception(self, err_hint, err_text):
-
-        evo_data = self.hass.data[DATA_EVOHOME]
+    def _handle_exception(self, err, err_hint=None):
         do_backoff = False
+
+        try:
+            raise err
+
 
 # 1/3: evohomeclient1 (<=0.2.7) does not have a requests exceptions handler:
 #     File ".../evohomeclient/__init__.py", line 33, in _populate_full_data
@@ -500,11 +502,12 @@ class EvoEntity(Entity):
 #   'message': 'Request count limitation exceeded, please try again later.'
 # }
 
-        if err_hint == "TooManyRequests":  # not actually from requests library
-            # v1 api limit has been exceeded
-            can_handle_this_exception = True
-            do_backoff = True
-            debug_code = "v1"
+        except TypeError:
+            if isinstance(err_hint, list):
+                if 'code' in err_hint[0]:
+                    if err_hint[0]['code'] == "TooManyRequests":  # not actually from requests library
+                        # v1 api limit has been exceeded
+                        do_backoff = True
 
 
 # 2/3: evohomeclient2 now (>=0.2.7) exposes requests exceptions, e.g.:
@@ -512,17 +515,18 @@ class EvoEntity(Entity):
 # - "Max retries exceeded with url", caused by "Connection timed out"
 #       elif err_hint == "ConnectionError":  # seems common with evohome
 #           can_handle_this_exception = False
+#       except ConnectionError:
+#           pass
 
 
 # 3/3: evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
 # - "400 Client Error: Bad Request for url" (e.g. Bad credentials)
 # - "429 Client Error: Too Many Requests for url" (api usuage limit exceeded)
 # - "503 Client Error: Service Unavailable for url" (e.g. website down)
-        elif err_hint == "HTTPError":
+        except HTTPError:
             if err.response.status_code == HTTP_TOO_MANY_REQUESTS:
                 # v2 api limit has been exceeded
                 do_backoff = True
-                debug_code = "v2"
 
             elif err.response.status_code == HTTP_SERVICE_UNAVAILABLE:
                 # this appears to be common with Honeywell servers
@@ -534,23 +538,16 @@ class EvoEntity(Entity):
 
         # Do we need to back off from current scan_interval?
         if do_backoff is True:
-            # api rate limit has been exceeded, so increase the scan_interval
-            old_scan_interval = self._params[CONF_SCAN_INTERVAL]
-            new_scan_interval = min(old_scan_interval * 2, 300)
-            self._params[CONF_SCAN_INTERVAL] = new_scan_interval
-
+            can_handle_this_exception = True
             _LOGGER.warning(
-                "API rate limit has been exceeded, suspending polling for %s "
-                "seconds, & increasing '%s' from %s to %s seconds.",
-                new_scan_interval * 3,
-                CONF_SCAN_INTERVAL,
-                old_scan_interval,
-                new_scan_interval
+                "The API rate limit has been exceeded, so suspending polling "
+                "for %s seconds.",
+                self._params[CONF_SCAN_INTERVAL] * 3,
             )
 
             # and also wait for a short while - 3 scan_intervals
             self._timers['statusUpdated'] = datetime.now() + \
-                timedelta(seconds=new_scan_interval * 3)
+                timedelta(seconds=self._params[CONF_SCAN_INTERVAL] * 3)
 
 
             return can_handle_this_exception
@@ -832,7 +829,7 @@ class EvoController(EvoEntity, ClimateDevice):
             try:
                 self._obj._set_status(operation_mode)                           # noqa: E501; pylint: disable=protected-access
             except HTTPError as err:
-                if not self._handle_exception("HTTPError", str(err)):
+                if not self._handle_exception(err):
                     raise
 
             if self._params[CONF_USE_HEURISTICS]:
@@ -947,7 +944,7 @@ class EvoController(EvoEntity, ClimateDevice):
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
 
         except HTTPError as err:
-            if not self._handle_exception("HTTPError", str(err)):
+            if not self._handle_exception(err):
                 raise
 
         else:
@@ -1039,14 +1036,9 @@ class EvoController(EvoEntity, ClimateDevice):
                     "via the v1 api. Continuing with v2 temps for now."
                 )
                 # Has api rate limit been exceeded?  If so, back off...
-                response = ec1_api.user_data
-                if isinstance(response, list):
-                    if 'code' in response[0]:
-                        err_hint = response[0]['code']
-                        err_text = response[0]['message']
-                        self._handle_exception(err_hint, err_text)
-                # Or what else could it be?
-                _LOGGER.debug("TypeError: ec1_api.user_data = %s", response)
+                if not self._handle_exception(err, ec1_api.user_data):
+                    # Or what else could it be?
+                    _LOGGER.debug("TypeError: ec1_api.user_data = %s", response)
                 #   raise  # no raise for TypeError
 
         _LOGGER.debug(
@@ -1336,7 +1328,7 @@ class EvoChildEntity(EvoEntity):
                 try:
                     self._schedule['schedule'] = self._obj.schedule()
                 except HTTPError as err:
-                    if not self._handle_exception("HTTPError", str(err)):
+                    if not self._handle_exception(err):
                         raise
                 else:
                     # only update the timers if the api call was successful
@@ -1464,7 +1456,7 @@ class EvoZone(EvoChildEntity, ClimateDevice):
             self._obj.set_temperature(temperature)
 
         except HTTPError as err:
-            if not self._handle_exception("HTTPError", str(err)):
+            if not self._handle_exception(err):
                 raise
 
         return None
@@ -1577,7 +1569,7 @@ class EvoZone(EvoChildEntity, ClimateDevice):
                 self._obj.cancel_temp_override(self._obj)
 
             except HTTPError as err:
-                if not self._handle_exception("HTTPError", str(err)):
+                if not self._handle_exception(err):
                     raise
 
         else:
@@ -1817,7 +1809,7 @@ class EvoBoiler(EvoChildEntity, WaterHeaterDevice):
             self._obj._set_dhw(data)                                            # noqa: E501; pylint: disable=protected-access
 
         except HTTPError as err:
-            if not self._handle_exception("HTTPError", str(err)):
+            if not self._handle_exception(err):
                 raise
 
         if self._params[CONF_USE_HEURISTICS]:
