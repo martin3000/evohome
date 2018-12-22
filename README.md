@@ -89,7 +89,7 @@ logger:
 2. The controller, which doesn't have a `current_temperature` is implemented as a climate entity, and HA expects all climate entities to report a temperature.  This causes problems with HA, and so it displays an average of all its zones' current/target temperatures.
 3. Away mode (as understood by HA), is not fully implemented as yet.  HA has difficulties with more 'complex' climate entities (this is under review). Away mode is available via the controller.
 4. No provision for changing schedules (yet).  This is for a future release.
-5. DHW is WIP.  Presently, there is no 'boiler' entity type in HA.
+5. DHW is WIP.  Presently, the 'water_heater' entity present in HA is not compatible.
 
 ## Notes about `scan_interval`
 
