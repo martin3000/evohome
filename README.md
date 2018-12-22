@@ -23,7 +23,7 @@ You will need to redo 1) only once if you use `git`.  You will need to redo 2) a
 
 ### Post-Installation checklist
 
-The system shoudl start, and show: the Controller, your Zones, and your DHW (if any).  If there is a problem, either
+The system should start, and show: the Controller, your Zones, and your DHW (if any).  If there is a problem, either
 a) you see nothing: first check your `configutation.yaml` - start with only username & password & go from there
 b) you see only the controller: installation is invalid and HA is using the builtin component, try the instructions here: https://community.home-assistant.io/t/refactored-honeywell-evohome-custom-component-eu-only/59733/182
 
