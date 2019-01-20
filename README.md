@@ -27,9 +27,9 @@ TBD
 
 ## Troubleshooting
 
-Execute this command: `cat home-assistant.log | grep custom | head`, and you should expect to see the following warning, `You are using a custom component for evohome_cc`:
+Execute this command: `cat home-assistant.log | grep WARNING | grep evohome`, and you should expect to see the following warning, `You are using a custom component for evohome_cc`:
 ```
-2018-11-06 16:30:33 WARNING (MainThread) [homeassistant.loader] You are using a custom component for evohome which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you do experience issues with Home Assistant.
+2018-11-06 16:30:33 WARNING (MainThread) [homeassistant.loader] You are using a custom component for evohome_cc which has not been tested by Home Assistant. This component might cause stability problems, be sure to disable it if you do experience issues with Home Assistant.
 ```
 
 If you don't see this, then something is wrong with your `custom_components` folder, or your `configuration.yaml`.
@@ -79,3 +79,10 @@ The `scan_interval` parameter defaults to 300 secs, but could be as low as 120 s
 However, Note that `high_precision` temps use 3 API calls per scan interval for a maximum of 90 per hour.
 
 I understand that up to 250 polls per hour is considered OK, but YMMV (if anyone has any official info on this, I'd like to know).
+
+## List of future features
+
+Replace AutoWithEco: mode that allows a delta of +/-0.5, +/-1.0, +/-1.5, etc.
+
+Improve heuristics: detect TRV Off, and OpenWindow
+
