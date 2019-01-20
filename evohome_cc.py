@@ -192,6 +192,8 @@ def setup(hass, hass_config):
 
 #   except requests.RequestException as err:
 #   except requests.exceptions.ConnectionError as err:
+#          requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))
+#            - takes 5 mins to timeout
 #   except requests.exceptions.HTTPError as err:
     except HTTPError as err:
         if err.response.status_code == HTTP_BAD_REQUEST:
@@ -406,7 +408,7 @@ class EvoDevice(Entity):
         However, evohome entities can become unavailable for other reasons.
         """
         no_recent_updates = self._timers['statusUpdated'] < datetime.now() - \
-            timedelta(seconds=self._params[CONF_SCAN_INTERVAL] * 3.1)
+            self._params[CONF_SCAN_INTERVAL] * 3.1
 
         if no_recent_updates:
             # unavailable because no successful update()s (but why?)
@@ -548,22 +550,27 @@ class EvoChildDevice(EvoDevice):
 
     def __init__(self, evo_data, client, obj_ref):
         """Initialize the evohome evohome Heating/DHW zone."""
-        self._obj = obj_ref
+        super().__init__(evo_data, client, obj_ref)
+
+        self._id = obj_ref.zoneId  # is also: obj_ref.dhwId
+        self._name = obj_ref.name
 
         if self._obj.zone_type == 'temperatureZone':
             self._type = EVO_CHILD | EVO_ZONE
+            self._icon = "mdi:radiator"
+
         elif self._obj.zone_type == 'domesticHotWater':
             self._type = EVO_CHILD | EVO_DHW
+            self._icon = "mdi:thermometer-lines"
+
         else:  # this should never happen!
             self._type = EVO_UNKNOWN
 
-        super().__init__(evo_data, client, obj_ref)
+        self._status = {}
 
-        _LOGGER.debug(
-            "__init__(%s), self._config = %s",
-            self._id + " [" + self._name + "]",
-            self._config
-        )
+        # children update their schedules themselves, unlike everything else
+        self._schedule = evo_data['schedules'][self._id] = {}
+        self._schedule['updated'] = datetime.min
 
     def _switchpoint(self, day_time=None, next_switchpoint=False):
         # return the switchpoint for a schedule at a particular day/time, for:

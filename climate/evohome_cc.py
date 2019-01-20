@@ -89,29 +89,23 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         """Initialize the evohome Zone."""
         super().__init__(evo_data, client, obj_ref)
 
-        self._id = obj_ref.zoneId
-        self._name = obj_ref.name
-        self._icon = "mdi:radiator"
-        self._type = EVO_CHILD | EVO_ZONE
-
         for _zone in evo_data['config'][GWS][0][TCS][0]['zones']:
             if _zone['zoneId'] == self._id:
                 self._config = _zone
                 break
-        self._status = {}
 
         self._operation_list = ZONE_OP_LIST
         # lf._config['setpointCapabilities']['allowedSetpointModes']
-
         self._supported_features = \
             SUPPORT_OPERATION_MODE | \
             SUPPORT_TARGET_TEMPERATURE | \
             SUPPORT_ON_OFF
 
-        # children update their schedules themselves
-        self._schedule = evo_data['schedules'][self._id] = {}
-        self._schedule['updated'] = datetime.min
-
+        _LOGGER.debug(
+            "__init__(%s), self._config = %s",
+            self._id + " [" + self._name + "]",
+            self._config
+        )
 
     @property
     def state(self):
@@ -855,7 +849,7 @@ class EvoController(EvoDevice, ClimateDevice):
         # Wait a minimum (scan_interval/60) mins (rounded up) between updates
         timeout = datetime.now() + timedelta(seconds=55)
         expired = timeout > self._timers['statusUpdated'] + \
-            timedelta(seconds=self._params[CONF_SCAN_INTERVAL])
+            self._params[CONF_SCAN_INTERVAL]
 
         if not expired:  # timer not expired, so exit
             return True

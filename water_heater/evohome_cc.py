@@ -46,22 +46,19 @@ class EvoDHW(EvoChildEntity, WaterHeaterDevice):
         """Initialize the evohome Zone."""
         super().__init__(evo_data, client, obj_ref)
 
-        self._id = obj_ref.zoneId  # is also: obj_ref.dhwId
-        self._name = "~DHW controller"
-        self._icon = "mdi:thermometer-lines"
-        self._type = EVO_CHILD | EVO_DHW
-
         self._config = evo_data['config'][GWS][0][TCS][0]['dhw']
-        self._status = {}
 
         self._operation_list = ZONE_OP_LIST
+
         self._supported_features = \
             SUPPORT_OPERATION_MODE | \
             SUPPORT_ON_OFF
 
-        # children update their schedules themselves
-        self._schedule = evo_data['schedules'][self._id] = {}
-        self._schedule['updated'] = datetime.min
+        _LOGGER.debug(
+            "__init__(%s), self._config = %s",
+            self._id + " [" + self._name + "]",
+            self._config
+        )
 
     @property
     def target_temperature(self):
