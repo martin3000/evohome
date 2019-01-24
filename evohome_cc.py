@@ -17,7 +17,7 @@ https://github.com/zxdavb/evohome/
 from datetime import datetime, timedelta
 import logging
 
-from requests.exceptions import HTTPError  # later: ConnectionError
+from requests.exceptions import ConnectionError, HTTPError
 import voluptuous as vol
 
 from homeassistant.const import (
@@ -190,12 +190,27 @@ def setup(hass, hass_config):
 #   except requests.exceptions.ConnectionError as err:
 #          requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))
 #            - takes 5 mins to timeout
+
+#   except requests.exceptions.ConnectionError as err:
+    except ConnectionError as err:
+        _LOGGER.error(
+            "setup(): Failed to connect with the vendor's web servers. "
+            "This is a networking error, possibly at the vendor's end. "
+            "Unable to continue. Resolve any errors and restart HA."
+        )
+        _LOGGER.error("setup(): The error message is: %s", err)
+        _LOGGER.error(
+            "setup(): For more help, see: https://github.com/zxdavb/evohome"
+        )
+
+        return False  # unable to continue
+
 #   except requests.exceptions.HTTPError as err:
     except HTTPError as err:
         if err.response.status_code == HTTP_BAD_REQUEST:
             _LOGGER.error(
                 "setup(): Failed to connect with the vendor's web servers. "
-                "Check your username (%s), and password are correct."
+                "Check your username (%s), and password are correct. "
                 "Unable to continue. Resolve any errors and restart HA.",
                 evo_data['params'][CONF_USERNAME]
             )
