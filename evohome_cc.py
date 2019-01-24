@@ -66,10 +66,6 @@ CONF_AWAY_TEMP = 'away_temp'
 CONF_OFF_TEMP = 'off_temp'
 CONF_DHW_TEMP = 'dhw_target_temp'
 
-SETPOINT_CAPABILITIES = 'setpointCapabilities'
-SETPOINT_STATE = 'setpointStatus'
-TARGET_TEMPERATURE = 'targetHeatTemperature'
-
 # Validation of the user's configuration.
 CV_FLOAT1 = vol.All(vol.Coerce(float), vol.Range(min=5, max=28))
 CV_FLOAT2 = vol.All(vol.Coerce(float), vol.Range(min=35, max=85))
@@ -221,6 +217,11 @@ def setup(hass, hass_config):
         else:
             raise  # we don't expect/handle any other HTTPErrors
 
+        _LOGGER.error("setup(): The error message is: %s", err)
+        _LOGGER.error(
+            "setup(): For more help, see: https://github.com/zxdavb/evohome"
+        )
+
         return False  # unable to continue
 
     finally:  # Redact username, password as no longer needed
@@ -319,7 +320,7 @@ class EvoDevice(Entity):
             # for all entity types this must have force_refresh=True
             self.async_schedule_update_ha_state(force_refresh=True)
 
-    def _handle_requests_exceptions(self, err, err_hint=None):
+    def _handle_exception(self, err, err_hint=None):
         can_handle_this_exception = do_backoff = False
 
         try:
@@ -386,9 +387,9 @@ class EvoDevice(Entity):
         return do_backoff or can_handle_this_exception
 
     @property
-    def name(self):
+    def name(self) -> str:
         """Return the name to use in the frontend UI."""
-#       _LOGGER.debug("name(%s) = %s", self._id, self._name)
+        _LOGGER.debug("name(%s) = %s", self._id, self._name)
         return self._name
 
     @property
@@ -398,8 +399,18 @@ class EvoDevice(Entity):
         return self._icon
 
     @property
-    def available(self):
-        """Return True is the device is available.
+    def should_poll(self) -> bool:
+        """Return True if this device should be polled.
+
+        The evohome Controller will inform its children when to update(),
+        evohome child devices should never be polled.
+        """
+#       _LOGGER.warn("should_poll(%s) = %s", self._id, self._type == EVO_PARENT)
+        return self._type == EVO_PARENT
+
+    @property
+    def available(self) -> bool:
+        """Return True if the device is currently available.
 
         All evohome entities are initially unavailable. Once HA has started,
         state data is then retrieved by the Controller, and then the children
@@ -442,18 +453,8 @@ class EvoDevice(Entity):
                 self._timers
             )
 
-#       _LOGGER.debug("available(%s) = %s", self._id, self._available)
+        _LOGGER.warn("available(%s) = %s", self._id, self._available)
         return self._available
-
-    @property
-    def should_poll(self) -> bool:
-        """Return True if this device should be polled.
-
-        The evohome Controller will inform its children when to update(),
-        evohome child devices should never be polled.
-        """
-        _LOGGER.warn("should_poll(%s) = %s", self._id, self._type == EVO_PARENT)
-        return self._type == EVO_PARENT
 
     @property
     def supported_features(self):
@@ -473,21 +474,8 @@ class EvoDevice(Entity):
         Note that, for evohome, the operating mode is determined by - but not
         equivalent to - the last operation (from the operation list).
         """
-#       _LOGGER.warn("operation_list(%s) = %s", self._id, self._op_list)
-        return self._op_list
-
-    @property
-    def current_operation(self):
-        """Return the operation mode of the evohome entity."""
-        if self._type & EVO_PARENT:
-            curr_op = self._status['systemModeStatus']['mode']
-        elif self._type & EVO_ZONE:
-            curr_op = self._status[SETPOINT_STATE]['setpointMode']
-        elif self._type & EVO_DHW:
-            curr_op = self._status['stateStatus']['mode']
-
-#       _LOGGER.warn("current_operation(%s) = %s", self._id, curr_op)
-        return curr_op
+#       _LOGGER.warn("operation_list(%s) = %s", self._id, self._operation_list)
+        return self._operation_list
 
     @property
     def temperature_unit(self):
@@ -511,6 +499,37 @@ class EvoDevice(Entity):
         return precision
 
     @property
+    def current_operation(self):
+        """Return the current operating mode of the evohome child device.
+
+        The evohome (child) devices that are in 'FollowSchedule' mode inherit
+        their actual operating mode from the (parent) Controller.
+        """
+        evo_data = self.hass.data[DATA_EVOHOME]
+        system_mode = evo_data['status']['systemModeStatus']['mode']
+
+        if self._type & EVO_PARENT:
+            current_operation = TCS_STATE_TO_HA.get(system_mode)
+
+        else:
+            if self._type & EVO_ZONE:
+                setpoint_mode = self._status['setpointStatus']['setpointMode']
+            else:  # self._type & EVO_DHW
+                setpoint_mode = self._status['stateStatus']['mode']
+
+            if setpoint_mode == EVO_FOLLOW:
+                # then inherit state from the controller
+                if system_mode == EVO_RESET:
+                    current_operation = TCS_STATE_TO_HA.get(EVO_AUTO)
+                else:
+                    current_operation = TCS_STATE_TO_HA.get(system_mode)
+            else:
+                current_operation = ZONE_STATE_TO_HA.get(setpoint_mode)
+
+        _LOGGER.warn("current_operation(%s) = %s", self._id, current_operation)
+        return current_operation
+
+    @property
     def min_temp(self):
         """Return the minimum target temp (setpoint) of a zone.
 
@@ -520,7 +539,7 @@ class EvoDevice(Entity):
         if self._type & EVO_PARENT:
             temp = MIN_TEMP
         elif self._type & EVO_ZONE:
-            temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
+            temp = self._config['setpointCapabilities']['minHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 35
 #       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
@@ -536,7 +555,7 @@ class EvoDevice(Entity):
         if self._type & EVO_PARENT:
             temp = MAX_TEMP
         elif self._type & EVO_ZONE:
-            temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
+            temp = self._config['setpointCapabilities']['maxHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 85
 #       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)

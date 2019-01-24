@@ -21,7 +21,8 @@ from custom_components.evohome_cc import (
     STATE_OFF, STATE_ON, STATE_AUTO, STATE_ECO, STATE_MANUAL,
 
     DATA_EVOHOME, DISPATCHER_EVOHOME,
-    CONF_LOCATION_IDX,
+    CONF_LOCATION_IDX, CONF_HIGH_PRECISION, CONF_USE_HEURISTICS,
+    CONF_USE_SCHEDULES,
 
     GWS, TCS, EVO_PARENT, EVO_CHILD, EVO_ZONE, EVO_DHW,
 
@@ -34,8 +35,11 @@ from custom_components.evohome_cc import (
     EvoDevice, EvoChildDevice,
 )
 from homeassistant.const import (
-    CONF_SCAN_INTERVAL,
-    HTTP_TOO_MANY_REQUESTS,
+    CONF_SCAN_INTERVAL, CONF_USERNAME, CONF_PASSWORD,
+    EVENT_HOMEASSISTANT_START,
+    HTTP_BAD_REQUEST, HTTP_SERVICE_UNAVAILABLE, HTTP_TOO_MANY_REQUESTS,
+    PRECISION_WHOLE, PRECISION_HALVES, PRECISION_TENTHS, TEMP_CELSIUS,
+    STATE_OFF, STATE_ON,
 )
 from homeassistant.helpers.dispatcher import dispatcher_send
 
@@ -123,7 +127,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         evo_data = self.hass.data[DATA_EVOHOME]
 
         tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
-        zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
+        zone_op_mode = self._status['setpointStatus']['setpointMode']
 
         # If possible, use inheritance to override reported state
         if zone_op_mode == EVO_FOLLOW:
@@ -138,7 +142,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
         # Optionally, use heuristics to override reported state (mode)
         if self._params[CONF_USE_HEURISTICS]:
-            zone_target_temp = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
+            zone_target_temp = self._status['setpointStatus']['targetHeatTemperature']
 
             if zone_target_temp == self.min_temp:
                 if zone_op_mode == EVO_TEMPOVER:
@@ -152,14 +156,14 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     "state(%s) = %s, via heuristics (but via api = %s)",
                     self._id,
                     state,
-                    self._status[SETPOINT_STATE]['setpointMode']
+                    self._status['setpointStatus']['setpointMode']
                 )
             else:
                 _LOGGER.debug(
                     "state(%s) = %s, via heuristics (via api = %s)",
                     self._id,
                     state,
-                    self._status[SETPOINT_STATE]['setpointMode']
+                    self._status['setpointStatus']['setpointMode']
                 )
         else:
             _LOGGER.debug("state(%s) = %s", self._id, state)
@@ -263,10 +267,10 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                 "updating local state data using heuristics..."
             )
 
-            self._status[SETPOINT_STATE]['setpointMode'] \
+            self._status['setpointStatus']['setpointMode'] \
                 = EVO_PERMOVER if until is None else EVO_TEMPOVER
 
-            self._status[SETPOINT_STATE][TARGET_TEMPERATURE] \
+            self._status['setpointStatus']['targetHeatTemperature'] \
                 = temperature
 
             _LOGGER.debug(
@@ -341,7 +345,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     self._id,
                     operation_mode
                 )
-                temperature = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
+                temperature = self._status['setpointStatus']['targetHeatTemperature']
 
 # PermanentOverride - override target temp indefinitely
         if operation_mode == EVO_PERMOVER:
@@ -379,15 +383,15 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                 "updating local state data using heuristics..."
             )
 
-            self._status[SETPOINT_STATE]['setpointMode'] \
+            self._status['setpointStatus']['setpointMode'] \
                 = operation_mode
 
             if operation_mode == EVO_FOLLOW:
                 if self._params[CONF_USE_SCHEDULES]:
-                    self._status[SETPOINT_STATE][TARGET_TEMPERATURE] \
+                    self._status['setpointStatus']['targetHeatTemperature'] \
                         = self.setpoint
             else:
-                self._status[SETPOINT_STATE][TARGET_TEMPERATURE] = temperature
+                self._status['setpointStatus']['targetHeatTemperature'] = temperature
 
             _LOGGER.debug(
                 "Calling tcs.schedule_update_ha_state()"
@@ -414,7 +418,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         return setpoint
 
     @property
-    def target_temperature(self):
+    def target_emperature(self):
         """Return the current target temperature of a zone.
 
         This is the _actual_ target temperature (a function of operating mode
@@ -426,13 +430,13 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 # switchpoint. If you change the controller mode, then
         evo_data = self.hass.data[DATA_EVOHOME]
 
-        temp = self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
+        temp = self._status['setpointStatus']['targetHeatTemperature']
 
         if self._params[CONF_USE_HEURISTICS] and \
                 self._params[CONF_USE_SCHEDULES]:
 
             tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
-            zone_op_mode = self._status[SETPOINT_STATE]['setpointMode']
+            zone_op_mode = self._status['setpointStatus']['setpointMode']
 
             if tcs_op_mode == EVO_CUSTOM:
                 pass  # target temps unknowable, must await update()
@@ -469,16 +473,16 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                 # the target temp can't be less than a zone's minimum setpoint
                 temp = max(self._params[CONF_OFF_TEMP], self.min_temp)
 
-            if temp != self._status[SETPOINT_STATE][TARGET_TEMPERATURE] and \
+            if temp != self._status['setpointStatus']['targetHeatTemperature'] and \
                     self.current_operation == EVO_FOLLOW:
                 _LOGGER.warning(
-                    "target_temperature(%s) = %s via heuristics "
+                    "'targetHeatTemperature'(%s) = %s via heuristics "
                     "(via api = %s) - "
                     "if you can determine the cause of this discrepancy, "
                     "please consider submitting an issue via github",
                     self._id,
                     temp,
-                    self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
+                    self._status['setpointStatus']['targetHeatTemperature']
                 )
             else:
                 _LOGGER.debug(
@@ -486,7 +490,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     "(via api = %s)",
                     self._id,
                     temp,
-                    self._status[SETPOINT_STATE][TARGET_TEMPERATURE]
+                    self._status['setpointStatus']['targetHeatTemperature']
                     )
 
         else:
@@ -651,10 +655,10 @@ class EvoController(EvoDevice, ClimateDevice):
                 if operation_mode == EVO_CUSTOM:
                     pass  # operating modes unknowable, must await update()
                 elif operation_mode == EVO_RESET:
-                    zone[SETPOINT_STATE]['setpointMode'] = EVO_FOLLOW
+                    zone['setpointStatus']['setpointMode'] = EVO_FOLLOW
                 else:
-                    if zone[SETPOINT_STATE]['setpointMode'] != EVO_PERMOVER:
-                        zone[SETPOINT_STATE]['setpointMode'] = EVO_FOLLOW
+                    if zone['setpointStatus']['setpointMode'] != EVO_PERMOVER:
+                        zone['setpointStatus']['setpointMode'] = EVO_FOLLOW
 
             # this section needs more testing
             if 'dhw' in self._status:
@@ -874,7 +878,7 @@ class EvoController(EvoDevice, ClimateDevice):
 # Finally, send a message to the children to update themselves
         pkt = {
             'sender': 'controller',
-            'signal': 'update',
+            'signal': 'refresh',
             'to': EVO_CHILD
         }
 
@@ -892,7 +896,7 @@ class EvoController(EvoDevice, ClimateDevice):
                  for zone in self._status['zones']]
         avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
-        _LOGGER.debug("target_temperature(%s) = %s", self._id, avg_temp)
+        _LOGGER.warn("target_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
 
     @property
@@ -904,6 +908,6 @@ class EvoController(EvoDevice, ClimateDevice):
         temps = [zone['temperatureStatus']['temperature'] for zone in tmp_dict]
         avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
-        _LOGGER.debug("current_temperature(%s) = %s", self._id, avg_temp)
+        _LOGGER.warn("current_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
 
