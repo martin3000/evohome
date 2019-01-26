@@ -540,15 +540,16 @@ class EvoDevice(Entity):
             else:  # self._type & EVO_DHW
                 setpoint_mode = self._status['stateStatus']['mode']
 
-            if setpoint_mode == EVO_FOLLOW:
+          # if setpoint_mode == EVO_FOLLOW:
                 # then inherit state from the controller
-                if system_mode == EVO_RESET:
-                    current_operation = TCS_STATE_TO_HA.get(EVO_AUTO)
-                else:
-                    current_operation = TCS_STATE_TO_HA.get(system_mode)
-            else:
-                current_operation = ZONE_STATE_TO_HA.get(setpoint_mode)
-                current_operation = setpoint_mode
+                # if system_mode == EVO_RESET:
+                    # current_operation = TCS_STATE_TO_HA.get(EVO_AUTO)
+                # else:
+                    # current_operation = TCS_STATE_TO_HA.get(system_mode)
+            # else:
+                # current_operation = ZONE_STATE_TO_HA.get(setpoint_mode)
+
+            current_operation = setpoint_mode
 
         _LOGGER.warn("current_operation(%s) = %s", self._id, current_operation)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return current_operation

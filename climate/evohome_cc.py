@@ -167,7 +167,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     self._status['setpointStatus']['setpointMode']
                 )
         else:
-            _LOGGER.debug("state(%s) = %s", self._id, state)
+            _LOGGER.warn("state(%s) = %s", self._id, state)
         return state
 
     def _set_temperature(self, temperature, until=None):
@@ -571,7 +571,7 @@ class EvoController(EvoDevice, ClimateDevice):
         else:  # usually = self.current_operation
             state = self.current_operation
 
-        _LOGGER.debug("state(%s) = %s", self._id, state)
+        _LOGGER.warn("state(%s) = %s", self._id, state)
         return state
 
     @property
