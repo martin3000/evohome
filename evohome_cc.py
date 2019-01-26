@@ -6,6 +6,7 @@ zones (e.g. TRVs, relays) and, optionally, a DHW controller.
 For more details about this custom component, please refer to the docs at
 https://github.com/zxdavb/evohome/
 """
+# pylint: disable=deprecated-method; ZXDEL
 
 # Glossary:
 #   TCS - temperature control system (a.k.a. Controller, Parent), which can
@@ -17,7 +18,7 @@ https://github.com/zxdavb/evohome/
 from datetime import datetime, timedelta
 import logging
 
-from requests.exceptions import ConnectionError, HTTPError
+import requests.exceptions
 import voluptuous as vol
 
 from homeassistant.const import (
@@ -38,7 +39,7 @@ from homeassistant.helpers.dispatcher import (
 from homeassistant.helpers.entity import Entity
 # from homeassistant.helpers.temperature import display_temp as show_temp
 
-# QUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']   # noqa: E501; pylint: disable=line-too-long
+# QUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']  # noqa: E501; pylint: disable=line-too-long; ZXDEL
 REQUIREMENTS = ['evohomeclient==0.2.8']
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ DATA_EVOHOME = 'data_' + DOMAIN
 DISPATCHER_EVOHOME = 'dispatcher_' + DOMAIN
 
 DHW_TEMP = 54  # this is a guess
-MIN_TEMP = 5
+MIN_TEMP = 5   # minimum measured temp (not minimum setpoint)
 MAX_TEMP = 35
 
 CONF_LOCATION_IDX = 'location_idx'
@@ -100,6 +101,11 @@ EVO_ZONE = 0x04
 EVO_DHW = 0x08
 EVO_UNKNOWN = 0x10
 
+# HA states
+STATE_AUTO = 'auto'      # used in
+STATE_ECO = 'eco'        # used in climate, water_heater
+STATE_MANUAL = 'manual'  # used in climate
+
 # the Controller's opmode/state and the zone's (inherited) state
 EVO_RESET = 'AutoWithReset'
 EVO_AUTO = 'Auto'
@@ -109,12 +115,8 @@ EVO_DAYOFF = 'DayOff'
 EVO_CUSTOM = 'Custom'
 EVO_HEATOFF = 'HeatingOff'
 
-STATE_AUTO = 'auto'      # used
-STATE_ECO = 'eco'        # used in climate, water_heater
-STATE_MANUAL = 'manual'  # used in climate
-
 # for the Controller. NB: evohome treats Away mode as a mode in/of itself,
-# where HA considers it to 'override' the exising operating mode
+# where HA considers it to 'override' the existing operating mode
 TCS_STATE_TO_HA = {
     EVO_RESET: STATE_ON,
     EVO_AUTO: STATE_ON,
@@ -124,12 +126,16 @@ TCS_STATE_TO_HA = {
     EVO_CUSTOM: STATE_ON,
     EVO_HEATOFF: STATE_OFF
 }
+TCS_STATE_TO_HA = {i: i for i, j in TCS_STATE_TO_HA.items()}                     # noqa: E501; pylint: disable=line-too-long; ZXDEL
+
 HA_STATE_TO_TCS = {
     STATE_ON: EVO_AUTO,
     STATE_ECO: EVO_AUTOECO,
     STATE_OFF: EVO_HEATOFF
 }
-TCS_OP_LIST = list(HA_STATE_TO_TCS)
+HA_STATE_TO_TCS = TCS_STATE_TO_HA                                                # noqa: E501; pylint: disable=line-too-long; ZXDEL
+
+TCS_OP_LIST = list(TCS_STATE_TO_HA)
 
 # the Zones' opmode; their state is usually 'inherited' from the TCS
 EVO_FOLLOW = 'FollowSchedule'
@@ -144,12 +150,15 @@ ZONE_STATE_TO_HA = {
     EVO_TEMPOVER: STATE_MANUAL,
     EVO_PERMOVER: STATE_MANUAL
 }
+ZONE_STATE_TO_HA = {i: i for i, j in ZONE_STATE_TO_HA.items()}                   # noqa: E501; pylint: disable=line-too-long; ZXDEL
+
 HA_STATE_TO_ZONE = {
     STATE_AUTO: EVO_FOLLOW,
     STATE_MANUAL: EVO_PERMOVER
 }
+HA_STATE_TO_ZONE = ZONE_STATE_TO_HA                                              # noqa: E501; pylint: disable=line-too-long; ZXDEL
+
 ZONE_OP_LIST = list(HA_STATE_TO_ZONE)
-TCS_OP_LIST = list(TCS_STATE_TO_HA)
 
 # other stuff
 DHW_STATES = {STATE_ON: 'On', STATE_OFF: 'Off'}
@@ -160,6 +169,7 @@ def setup(hass, hass_config):
 
     Currently, only the Controller and the Zones are implemented here.
     """
+    # CC; pylint: disable=too-many-branches, too-many-statements
     evo_data = hass.data[DATA_EVOHOME] = {}
     evo_data['timers'] = {}
 
@@ -177,22 +187,16 @@ def setup(hass, hass_config):
         _LOGGER.warn("setup(): Configuration parameters: %s", tmp)
 
     from evohomeclient2 import EvohomeClient
-    _LOGGER.warn("setup(): API call [4 request(s)]: client.__init__()...")
-    try:
+    _LOGGER.warn("setup(): API call [4 request(s)]: client.__init__()...")       # noqa: E501; pylint: disable=line-too-long; ZXDEL
 
+    try:
         client = evo_data['client'] = EvohomeClient(
             evo_data['params'][CONF_USERNAME],
             evo_data['params'][CONF_PASSWORD],
             # debug=False
         )
 
-#   except requests.RequestException as err:
-#   except requests.exceptions.ConnectionError as err:
-#          requests.exceptions.ConnectionError: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))
-#            - takes 5 mins to timeout
-
-#   except requests.exceptions.ConnectionError as err:
-    except ConnectionError as err:
+    except requests.exceptions.ConnectionError as err:
         _LOGGER.error(
             "setup(): Failed to connect with the vendor's web servers. "
             "This is a networking error, possibly at the vendor's end. "
@@ -202,11 +206,9 @@ def setup(hass, hass_config):
         _LOGGER.error(
             "setup(): For more help, see: https://github.com/zxdavb/evohome"
         )
-
         return False  # unable to continue
 
-#   except requests.exceptions.HTTPError as err:
-    except HTTPError as err:
+    except requests.exceptions.HTTPError as err:
         if err.response.status_code == HTTP_BAD_REQUEST:
             _LOGGER.error(
                 "setup(): Failed to connect with the vendor's web servers. "
@@ -226,7 +228,7 @@ def setup(hass, hass_config):
             _LOGGER.error(
                 "setup(): Failed to connect with the vendor's web servers. "
                 "You have exceeded the API rate limit. Unable to continue. "
-                "Wait a while (say 10 minutes) and restart HA."
+                "Try waiting a while (say 10 minutes) and restart HA."
             )
 
         else:
@@ -236,7 +238,6 @@ def setup(hass, hass_config):
         _LOGGER.error(
             "setup(): For more help, see: https://github.com/zxdavb/evohome"
         )
-
         return False  # unable to continue
 
     finally:  # Redact username, password as no longer needed
@@ -259,12 +260,19 @@ def setup(hass, hass_config):
 
     try:
         evo_data['config'] = client.installation_info[loc_idx]
+
     except IndexError:
-        _LOGGER.warning(
-            "setup(): Parameter '%s' = %s , is outside its range (0-%s)",
+        _LOGGER.error(
+            "setup(): Parameter '%s' = %s , is outside its permissible range "
+            "(0-%s). Unable to continue. "
+            "Check your configuration, resolve any errors and restart HA.",
             CONF_LOCATION_IDX,
             loc_idx,
             len(client.installation_info) - 1
+        )
+
+        _LOGGER.error(
+            "setup(): For more help, see: https://github.com/zxdavb/evohome"
         )
         return False  # unable to continue
 
@@ -296,7 +304,7 @@ def setup(hass, hass_config):
         load_platform(hass, 'water_heater', DOMAIN, {}, hass_config)
 
     @callback
-    def _first_update(event):
+    def _first_update(event):                                                    # noqa: E501; pylint: disable=line-too-long, unused-argument
         # When HA has started, the hub knows to retrieve it's first update
         pkt = {'sender': 'setup()', 'signal': 'refresh', 'to': EVO_PARENT}
         async_dispatcher_send(hass, DISPATCHER_EVOHOME, pkt)
@@ -329,18 +337,54 @@ class EvoDevice(Entity):
     @callback
     def _connect(self, packet):
         """Process a dispatcher connect."""
-        _LOGGER.warn("_connect(%s): got packet %s", self._id, packet)
+#       _LOGGER.debug("_connect(%s): got packet %s", self._id, packet)
 
         if packet['to'] & self._type and packet['signal'] == 'refresh':
             # for all entity types this must have force_refresh=True
             self.async_schedule_update_ha_state(force_refresh=True)
 
     def _handle_exception(self, err, err_hint=None):
-        can_handle_this_exception = do_backoff = False
-
+        """Return True if the Exception can be handled/ignored."""
         try:
             raise err
 
+# 2/3: evohomeclient2 now (>=0.2.7) exposes requests exceptions, e.g.:
+# - 'Connection aborted.', ConnectionResetError('Connection reset by peer')
+# - "Max retries exceeded with url", caused by "Connection timed out"
+# - NB: takes 5 mins to timeout
+        except requests.exceptions.ConnectionError:
+            # this appears to be common with Honeywell servers
+            _LOGGER.warning(
+                "The vendor's web servers appear to be uncontactable, so "
+                "unable to get the latest state data during this cycle. "
+                "NB: This is often a problem with the vendor's network."
+            )
+            return True
+
+# 3/3: evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
+# - "400 Client Error: Bad Request for url" (e.g. Bad credentials)
+# - "429 Client Error: Too Many Requests for url" (api usage limit exceeded)
+# - "503 Client Error: Service Unavailable for url" (e.g. website down)
+        except requests.exceptions.HTTPError:
+            if err.response.status_code == HTTP_TOO_MANY_REQUESTS:
+                _LOGGER.warning(
+                    "The vendor's API rate limit has been exceeded, so "
+                    "unable to get the latest state data during this cycle. "
+                    "Suspending polling, and will resume after %s seconds.",
+                    (self._params[CONF_SCAN_INTERVAL] * 3).total_seconds()
+                )
+                self._timers['statusUpdated'] = datetime.now() + \
+                    self._params[CONF_SCAN_INTERVAL] * 3
+                return True
+
+            if err.response.status_code == HTTP_SERVICE_UNAVAILABLE:
+                # this appears to be common with Honeywell servers
+                _LOGGER.warning(
+                    "The vendor's web servers appear unavailable, so "
+                    "unable to get the latest state data during this cycle. "
+                    "NB: This is often a problem with the vendor's network."
+                )
+                return True
 
 # 1/3: evohomeclient1 (<=0.2.7) does not have a requests exceptions handler:
 #     File ".../evohomeclient/__init__.py", line 33, in _populate_full_data
@@ -348,69 +392,33 @@ class EvoDevice(Entity):
 #   TypeError: list indices must be integers or slices, not str
 
 # but we can (sometimes) extract the response, which may be like this:
-# {
+# [{
 #   'code':    'TooManyRequests',
 #   'message': 'Request count limitation exceeded, please try again later.'
-# }
+# }]
 
         except TypeError:
-            if isinstance(err_hint, list):
-                if 'code' in err_hint[0]:
-                    if err_hint[0]['code'] == "TooManyRequests":
-                        # not actually from requests library
-                        # v1 API limit has been exceeded
-                        do_backoff = True
+            if isinstance(err_hint, list) and 'code' in err_hint[0]:
+                if err_hint[0]['code'] == "TooManyRequests":
+                    _LOGGER.warning(
+                        "The vendor's v1 API rate limit has been exceeded, so "
+                        "unable to get higher-precision (v1) temperatures. "
+                        "Continuing with standard (v2) temperatures for now."
+                    )
+                    return True
 
-
-# 2/3: evohomeclient2 now (>=0.2.7) exposes requests exceptions, e.g.:
-# - "Connection reset by peer"
-# - "Max retries exceeded with url", caused by "Connection timed out"
-#       elif err_hint == "ConnectionError":  # seems common with evohome
-#           can_handle_this_exception = False
-#       except ConnectionError:
-#           pass
-
-
-# 3/3: evohomeclient2 (>=0.2.7) now exposes requests exceptions, e.g.:
-# - "400 Client Error: Bad Request for url" (e.g. Bad credentials)
-# - "429 Client Error: Too Many Requests for url" (api usuage limit exceeded)
-# - "503 Client Error: Service Unavailable for url" (e.g. website down)
-        except HTTPError:
-            if err.response.status_code == HTTP_TOO_MANY_REQUESTS:
-                # v2 api limit has been exceeded
-                do_backoff = True
-
-            elif err.response.status_code == HTTP_SERVICE_UNAVAILABLE:
-                # this appears to be common with Honeywell servers
-                can_handle_this_exception = False
-
-        else:
-            can_handle_this_exception = False
-
-        # Do we need to back off from current scan_interval?
-        if do_backoff is True:
-            _LOGGER.warning(
-                "The API rate limit has been exceeded, so suspending polling "
-                "for %s seconds.",
-                self._params[CONF_SCAN_INTERVAL] * 3,
-            )
-
-            # and also wait for a short while - 3 scan_intervals
-            self._timers['statusUpdated'] = datetime.now() + \
-                timedelta(seconds=self._params[CONF_SCAN_INTERVAL] * 3)
-
-        return do_backoff or can_handle_this_exception
+        return False
 
     @property
     def name(self) -> str:
         """Return the name to use in the frontend UI."""
-        _LOGGER.debug("name(%s) = %s", self._id, self._name)
+        _LOGGER.warn("name(%s) = %s", self._id, self._name)                      # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._name
 
     @property
     def icon(self):
         """Return the icon to use in the frontend UI."""
-#       _LOGGER.debug("icon(%s) = %s", self._id, self._icon)
+#       _LOGGER.debug("icon(%s) = %s", self._id, self._icon)                     # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._icon
 
     @property
@@ -420,7 +428,7 @@ class EvoDevice(Entity):
         The evohome Controller will inform its children when to update(),
         evohome child devices should never be polled.
         """
-#       _LOGGER.warn("should_poll(%s) = %s", self._id, self._type == EVO_PARENT)
+        _LOGGER.warn("should_poll(%s) = %s", self._id, self._type == EVO_PARENT)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._type == EVO_PARENT
 
     @property
@@ -468,7 +476,7 @@ class EvoDevice(Entity):
                 self._timers
             )
 
-        _LOGGER.warn("available(%s) = %s", self._id, self._available)
+        _LOGGER.warn("available(%s) = %s", self._id, self._available)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._available
 
     @property
@@ -478,8 +486,8 @@ class EvoDevice(Entity):
 # fashion, even though evohome's implementation of these modes are subtly
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
-#       feats = self._supported_features
-#       _LOGGER.warn("supported_features(%s) = %s", self._id, feats)
+        feats = self._supported_features
+        _LOGGER.warn("supported_features(%s) = %s", self._id, feats)             # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._supported_features
 
     @property
@@ -489,13 +497,13 @@ class EvoDevice(Entity):
         Note that, for evohome, the operating mode is determined by - but not
         equivalent to - the last operation (from the operation list).
         """
-#       _LOGGER.warn("operation_list(%s) = %s", self._id, self._operation_list)
+        _LOGGER.warn("operation_list(%s) = %s", self._id, self._operation_list)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._operation_list
 
     @property
     def temperature_unit(self):
         """Return the temperature unit to use in the frontend UI."""
-#       _LOGGER.debug("temperature_unit(%s) = %s", self._id, TEMP_CELSIUS)
+        _LOGGER.debug("temperature_unit(%s) = %s", self._id, TEMP_CELSIUS)       # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return TEMP_CELSIUS
 
     @property
@@ -510,7 +518,7 @@ class EvoDevice(Entity):
         elif self._type & EVO_DHW:
             precision = PRECISION_WHOLE
 
-#       _LOGGER.debug("precision(%s) = %s", self._id, precision)
+        _LOGGER.debug("precision(%s) = %s", self._id, precision)                 # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return precision
 
     @property
@@ -540,8 +548,9 @@ class EvoDevice(Entity):
                     current_operation = TCS_STATE_TO_HA.get(system_mode)
             else:
                 current_operation = ZONE_STATE_TO_HA.get(setpoint_mode)
+                current_operation = setpoint_mode
 
-        _LOGGER.warn("current_operation(%s) = %s", self._id, current_operation)
+        _LOGGER.warn("current_operation(%s) = %s", self._id, current_operation)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return current_operation
 
     @property
@@ -557,7 +566,7 @@ class EvoDevice(Entity):
             temp = self._config['setpointCapabilities']['minHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 35
-#       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)
+        _LOGGER.debug("min_temp(%s) = %s", self._id, temp)                       # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return temp
 
     @property
@@ -573,7 +582,7 @@ class EvoDevice(Entity):
             temp = self._config['setpointCapabilities']['maxHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 85
-#       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)
+        _LOGGER.debug("max_temp(%s) = %s", self._id, temp)                       # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return temp
 
 
@@ -696,7 +705,7 @@ class EvoChildDevice(EvoDevice):
             data['switchpoints']['next'] = \
                 self._switchpoint(next_switchpoint=True)
 
-        _LOGGER.debug("device_state_attributes(%s) = %s", self._id, data)
+        _LOGGER.warn("device_state_attributes(%s) = %s", self._id, data)         # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return data
 
     def async_set_operation_mode(self, operation_mode):
@@ -729,7 +738,7 @@ class EvoChildDevice(EvoDevice):
                 self._id
             )
 
-#       _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)
+        _LOGGER.warn("current_temperature(%s) = %s", self._id, curr_temp)        # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return curr_temp
 
     def update(self):
@@ -791,7 +800,7 @@ class EvoChildDevice(EvoDevice):
 
                 try:
                     self._schedule['schedule'] = self._obj.schedule()
-                except HTTPError as err:
+                except requests.exceptions.HTTPError as err:
                     if not self._handle_exception(err):
                         raise
                 else:

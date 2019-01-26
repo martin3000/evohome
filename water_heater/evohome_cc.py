@@ -9,7 +9,7 @@ https://home-assistant.io/components/evohome/
 
 import logging
 
-from custom_components.evohome import (
+from custom_components.evohome_cc import (
     EvoBoiler,
     DATA_EVOHOME,
 )

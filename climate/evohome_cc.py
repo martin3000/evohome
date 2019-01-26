@@ -6,43 +6,41 @@ zones (e.g. TRVs, relays).
 For more details about this platform, please refer to the documentation at
 https://github.com/zxdavb/evohome/
 """
+# pylint: disable=deprecated-method, unused-import; ZXDEL
 
 from datetime import datetime, timedelta
 import logging
 
-from requests.exceptions import HTTPError
+import requests.exceptions
 
 from homeassistant.components.climate import (
     SUPPORT_AWAY_MODE, SUPPORT_ON_OFF, SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
 
     ClimateDevice
 )
+from homeassistant.const import (
+    CONF_SCAN_INTERVAL,
+    STATE_OFF, STATE_ON,
+    ATTR_TEMPERATURE,
+)
 from custom_components.evohome_cc import (
-    STATE_OFF, STATE_ON, STATE_AUTO, STATE_ECO, STATE_MANUAL,
+    STATE_AUTO, STATE_ECO, STATE_MANUAL,
 
     DATA_EVOHOME, DISPATCHER_EVOHOME,
     CONF_LOCATION_IDX, CONF_HIGH_PRECISION, CONF_USE_HEURISTICS,
-    CONF_USE_SCHEDULES,
+    CONF_USE_SCHEDULES, CONF_AWAY_TEMP, CONF_OFF_TEMP,
 
     GWS, TCS, EVO_PARENT, EVO_CHILD, EVO_ZONE, EVO_DHW,
 
     EVO_RESET, EVO_AUTO, EVO_AUTOECO, EVO_AWAY, EVO_DAYOFF, EVO_CUSTOM,
-    EVO_HEATOFF, EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER,
+    EVO_HEATOFF, EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER, EVO_FROSTMODE,
 
     TCS_STATE_TO_HA, HA_STATE_TO_TCS, TCS_OP_LIST,
     ZONE_STATE_TO_HA, HA_STATE_TO_ZONE, ZONE_OP_LIST,
 
     EvoDevice, EvoChildDevice,
 )
-from homeassistant.const import (
-    CONF_SCAN_INTERVAL, CONF_USERNAME, CONF_PASSWORD,
-    EVENT_HOMEASSISTANT_START,
-    HTTP_BAD_REQUEST, HTTP_SERVICE_UNAVAILABLE, HTTP_TOO_MANY_REQUESTS,
-    PRECISION_WHOLE, PRECISION_HALVES, PRECISION_TENTHS, TEMP_CELSIUS,
-    STATE_OFF, STATE_ON,
-)
-from homeassistant.helpers.dispatcher import dispatcher_send
-
+ATTR_UNTIL = 'until'
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -88,6 +86,8 @@ async def async_setup_platform(hass, hass_config, async_add_entities,
 
 class EvoZone(EvoChildDevice, ClimateDevice):
     """Base for a Honeywell evohome heating zone (e.g. a TRV)."""
+
+    # pylint: disable=abstract-method
 
     def __init__(self, evo_data, client, obj_ref):
         """Initialize the evohome Zone."""
@@ -142,7 +142,8 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
         # Optionally, use heuristics to override reported state (mode)
         if self._params[CONF_USE_HEURISTICS]:
-            zone_target_temp = self._status['setpointStatus']['targetHeatTemperature']
+            zone_target_temp = \
+                self._status['setpointStatus']['targetHeatTemperature']
 
             if zone_target_temp == self.min_temp:
                 if zone_op_mode == EVO_TEMPOVER:
@@ -188,7 +189,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 # If is None: PermanentOverride - override target temp indefinitely
 #  otherwise: TemporaryOverride - override target temp, until some time
 
-        max_temp = self._config[SETPOINT_CAPABILITIES]['maxHeatSetpoint']
+        max_temp = self._config['setpointCapabilities']['maxHeatSetpoint']
         if temperature > max_temp:
             _LOGGER.error(
                 "set_temperature(%s): Temp %s is above maximum, %s! "
@@ -199,7 +200,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             )
             return False
 
-        min_temp = self._config[SETPOINT_CAPABILITIES]['minHeatSetpoint']
+        min_temp = self._config['setpointCapabilities']['minHeatSetpoint']
         if temperature < min_temp:
             _LOGGER.error(
                 "set_temperature(%s): Temp %s is below minimum, %s! "
@@ -220,7 +221,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         try:
             self._obj.set_temperature(temperature)
 
-        except HTTPError as err:
+        except requests.exceptions.HTTPError as err:
             if not self._handle_exception(err):
                 raise
 
@@ -281,7 +282,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
         return True
 
-    def set_operation_mode(self, operation_mode, **kwargs):                     # noqa: E501; pylint: disable=arguments-differ
+    def set_operation_mode(self, operation_mode, **kwargs):                      # noqa: E501; pylint: disable=arguments-differ
         # t_operation_mode(hass, operation_mode, entity_id=None):
         """Set an operating mode for a Zone.
 
@@ -333,7 +334,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             try:
                 self._obj.cancel_temp_override(self._obj)
 
-            except HTTPError as err:
+            except requests.exceptions.HTTPError as err:
                 if not self._handle_exception(err):
                     raise
 
@@ -345,7 +346,8 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     self._id,
                     operation_mode
                 )
-                temperature = self._status['setpointStatus']['targetHeatTemperature']
+                temperature = \
+                    self._status['setpointStatus']['targetHeatTemperature']
 
 # PermanentOverride - override target temp indefinitely
         if operation_mode == EVO_PERMOVER:
@@ -391,7 +393,8 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     self._status['setpointStatus']['targetHeatTemperature'] \
                         = self.setpoint
             else:
-                self._status['setpointStatus']['targetHeatTemperature'] = temperature
+                self._status['setpointStatus']['targetHeatTemperature'] = \
+                    temperature
 
             _LOGGER.debug(
                 "Calling tcs.schedule_update_ha_state()"
@@ -418,7 +421,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         return setpoint
 
     @property
-    def target_emperature(self):
+    def target_temperature(self):
         """Return the current target temperature of a zone.
 
         This is the _actual_ target temperature (a function of operating mode
@@ -473,8 +476,8 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                 # the target temp can't be less than a zone's minimum setpoint
                 temp = max(self._params[CONF_OFF_TEMP], self.min_temp)
 
-            if temp != self._status['setpointStatus']['targetHeatTemperature'] and \
-                    self.current_operation == EVO_FOLLOW:
+            if self.current_operation == EVO_FOLLOW and temp != \
+                self._status['setpointStatus']['targetHeatTemperature']:
                 _LOGGER.warning(
                     "'targetHeatTemperature'(%s) = %s via heuristics "
                     "(via api = %s) - "
@@ -499,13 +502,13 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
     @property
     def target_temperature_step(self):
-        """Return the step of setpont (target temp) of a zone.
+        """Return the step of setpoint (target temp) of a zone.
 
         Only applies to heating zones, not DHW controllers (boilers).
         """
-#       step = self._config[SETPOINT_CAPABILITIES]['valueResolution']
-        step = PRECISION_HALVES
-#       _LOGGER.debug("target_temperature_step(%s) = %s", self._id, step)
+        step = self._config['setpointCapabilities']['valueResolution']
+#       step = PRECISION_HALVES
+        _LOGGER.warn("target_temperature_step(%s) = %s", self._id, step)
         return step
 
 
@@ -515,6 +518,8 @@ class EvoController(EvoDevice, ClimateDevice):
     The Controller (aka TCS, temperature control system) is the parent of all
     the child (CH/DHW) devices.  It is also a Climate device.
     """
+
+    # pylint: disable=abstract-method
 
     def __init__(self, evo_data, client, obj_ref):
         """Initialize the evohome Controller (hub)."""
@@ -529,7 +534,7 @@ class EvoController(EvoDevice, ClimateDevice):
         self._status = evo_data['status']
         self._timers['statusUpdated'] = datetime.min
 
-        self._operation_list = TCS_OP_LIST
+        self._operation_list = list(TCS_STATE_TO_HA)
         # lf._config['allowedSystemModes']
         self._supported_features = \
             SUPPORT_OPERATION_MODE | \
@@ -607,7 +612,7 @@ class EvoController(EvoDevice, ClimateDevice):
         )
 
 # PART 1: Call the api
-        if operation_mode in TCS_MODES:
+        if operation_mode in list(TCS_STATE_TO_HA):
             _LOGGER.debug(
                 "set_operation_mode(): API call [1 request(s)]: "
                 "tcs._set_status(%s)...",
@@ -620,7 +625,8 @@ class EvoController(EvoDevice, ClimateDevice):
 # self._obj._set_status(mode)
             try:
                 self._obj._set_status(operation_mode)                           # noqa: E501; pylint: disable=protected-access
-            except HTTPError as err:
+
+            except requests.exceptions.HTTPError as err:
                 if not self._handle_exception(err):
                     raise
 
@@ -735,7 +741,7 @@ class EvoController(EvoDevice, ClimateDevice):
             evo_data['status'].update(  # or: evo_data['status'] =
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
 
-        except HTTPError as err:
+        except requests.exceptions.HTTPError as err:
             if not self._handle_exception(err):
                 raise
 
@@ -747,7 +753,11 @@ class EvoController(EvoDevice, ClimateDevice):
             "_update_state_data(): evo_data['status'] = %s",
             evo_data['status']
         )
-        _LOGGER.debug("self._timers = %s, evo_data['timers'] = %s", self._timers, evo_data['timers'])
+        _LOGGER.debug(
+            "self._timers = %s, evo_data['timers'] = %s",
+            self._timers,
+            evo_data['timers']
+            )
 
     # 2. AFTER obtaining state data, do we need to increase precision of temps?
         if self._params[CONF_HIGH_PRECISION] and \
@@ -771,15 +781,31 @@ class EvoController(EvoDevice, ClimateDevice):
                     "client.temperatures()..."
                 )
                 # this is a a generator, so use list()
-                # i think: DHW first (if any), then zones ordered by name
+                # I think: DHW first (if any), then zones ordered by name
                 new_dict_list = list(ec1_api.temperatures(force_refresh=True))
 
+            except TypeError as err:
+                # Has api rate limit been exceeded?
+                if not self._handle_exception(err, err_hint=ec1_api.user_data):
+                    # Or what else could it be?
+                    _LOGGER.warning(
+                        "Failed to obtain higher-precision (v1) temperatures. "
+                        "Continuing with standard (v2) temperatures for now."
+                    )
+
+                    _LOGGER.debug(
+                        "TypeError: ec1_api.user_data = %s",
+                        ec1_api.user_data
+                    )
+                    raise
+
+            else:
                 _LOGGER.debug(
                     "_update_state_data(): new_dict_list = %s",
                     new_dict_list
                 )
 
-    # start prep of the data
+                # start prep of the data
                 for zone in new_dict_list:
                     del zone['name']
                     zone['apiV1Status'] = {}
@@ -790,7 +816,7 @@ class EvoController(EvoDevice, ClimateDevice):
                     else:
                         zone['apiV1Status']['temp'] = None
 
-    # first handle the DHW, if any (done this way for readability)
+                # first handle the DHW, if any (done this way for readability)
                 if new_dict_list[0]['thermostat'] == 'DOMESTIC_HOT_WATER':
                     dhw_v1 = new_dict_list.pop(0)
 
@@ -801,7 +827,7 @@ class EvoController(EvoDevice, ClimateDevice):
                     dhw_v2 = evo_data['status']['dhw']
                     dhw_v2.update(dhw_v1)  # more like a merge
 
-    # now, prepare the v1 zones to merge into the v2 zones
+                # now, prepare the v1 zones to merge into the v2 zones
                 for zone in new_dict_list:
                     zone['zoneId'] = str(zone.pop('id'))
                     zone['apiV1Status']['setpoint'] = zone.pop('setpoint')
@@ -814,24 +840,13 @@ class EvoController(EvoDevice, ClimateDevice):
                     org_dict_list
                 )
 
-    # finally, merge the v1 zones into the v2 zones
-    #  - dont use sorted(), it will create a new list!
+                # finally, merge the v1 zones into the v2 zones
+                #  - dont use sorted(), it will create a new list!
                 new_dict_list.sort(key=lambda x: x['zoneId'])
                 org_dict_list.sort(key=lambda x: x['zoneId'])
                 # v2 and v1 lists _should_ now be zip'ble
                 for i, j in zip(org_dict_list, new_dict_list):
                     i.update(j)
-
-            except TypeError as err:
-                _LOGGER.warning(
-                    "Failed to obtain higher-precision temperatures "
-                    "via the v1 api. Continuing with v2 temps for now."
-                )
-                # Has api rate limit been exceeded?  If so, back off...
-                if not self._handle_exception(err, ec1_api.user_data):
-                    # Or what else could it be?
-                    _LOGGER.debug("TypeError: ec1_api.user_data = %s", response)
-                #   raise  # no raise for TypeError
 
         _LOGGER.debug(
             "_update_state_data(): evo_data['status'] = %s",
@@ -910,4 +925,3 @@ class EvoController(EvoDevice, ClimateDevice):
 
         _LOGGER.warn("current_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
-
