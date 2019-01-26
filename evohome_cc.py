@@ -523,33 +523,16 @@ class EvoDevice(Entity):
 
     @property
     def current_operation(self):
-        """Return the current operating mode of the evohome child device.
-
-        The evohome (child) devices that are in 'FollowSchedule' mode inherit
-        their actual operating mode from the (parent) Controller.
-        """
-        evo_data = self.hass.data[DATA_EVOHOME]
-        system_mode = evo_data['status']['systemModeStatus']['mode']
-
+        """Return the current operating mode of the evohome device."""
         if self._type & EVO_PARENT:
-            current_operation = TCS_STATE_TO_HA.get(system_mode)
+            evo_data = self.hass.data[DATA_EVOHOME]
+            current_operation = evo_data['status']['systemModeStatus']['mode']
 
-        else:
-            if self._type & EVO_ZONE:
-                setpoint_mode = self._status['setpointStatus']['setpointMode']
-            else:  # self._type & EVO_DHW
-                setpoint_mode = self._status['stateStatus']['mode']
+        elif self._type & EVO_ZONE:
+            current_operation = self._status['setpointStatus']['setpointMode']
 
-          # if setpoint_mode == EVO_FOLLOW:
-                # then inherit state from the controller
-                # if system_mode == EVO_RESET:
-                    # current_operation = TCS_STATE_TO_HA.get(EVO_AUTO)
-                # else:
-                    # current_operation = TCS_STATE_TO_HA.get(system_mode)
-            # else:
-                # current_operation = ZONE_STATE_TO_HA.get(setpoint_mode)
-
-            current_operation = setpoint_mode
+        else:  # self._type & EVO_DHW
+            current_operation = self._status['stateStatus']['mode']
 
         _LOGGER.warn("current_operation(%s) = %s", self._id, current_operation)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return current_operation

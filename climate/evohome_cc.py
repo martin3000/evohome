@@ -115,22 +115,25 @@ class EvoZone(EvoChildDevice, ClimateDevice):
     def state(self):
         """Return the current state of a zone - usually, its operation mode.
 
-        A zone's state is usually its operation mode, but they can enter
-        OpenWindowMode autonomously, or they can be 'Off', or just set to 5.0C.
-        In all three case, the client api seems to report 5C.
+        The evohome (child) devices that are in 'FollowSchedule' mode inherit
+        their actual operating mode from the (parent) Controller.
 
-        This is complicated futher by the possibility that the minSetPoint is
-        greater than 5C.
+        A child's state is usually its operation mode, but they can enter
+        OpenWindowMode autonomously, or they can be 'Off', or just set to 4/5C.
+        In all three cases, the client api seems to report 4/5C.
+
+        This is complicated further by the possibility that the minSetPoint is
+        greater than 4/5C.
         """
 # When Zone is 'Off' & TCS == Away: Zone = TempOver/5C
 # When Zone is 'Follow' & TCS = Away: Zone = Follow/15C
-        evo_data = self.hass.data[DATA_EVOHOME]
-
-        tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
         zone_op_mode = self._status['setpointStatus']['setpointMode']
 
         # If possible, use inheritance to override reported state
         if zone_op_mode == EVO_FOLLOW:
+            evo_data = self.hass.data[DATA_EVOHOME]
+            tcs_op_mode = evo_data['status']['systemModeStatus']['mode']
+
             if tcs_op_mode == EVO_RESET:
                 state = EVO_AUTO
             elif tcs_op_mode == EVO_HEATOFF:
@@ -142,10 +145,8 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
         # Optionally, use heuristics to override reported state (mode)
         if self._params[CONF_USE_HEURISTICS]:
-            zone_target_temp = \
-                self._status['setpointStatus']['targetHeatTemperature']
-
-            if zone_target_temp == self.min_temp:
+            if self._status['setpointStatus']['targetHeatTemperature'] == \
+                self.min_temp:
                 if zone_op_mode == EVO_TEMPOVER:
                     # TRV turned to Off, or ?OpenWindowMode?
                     state = EVO_FROSTMODE + " (Off?)"
