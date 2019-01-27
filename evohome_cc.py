@@ -184,7 +184,7 @@ def setup(hass, hass_config):
         tmp[CONF_USERNAME] = 'REDACTED'
         tmp[CONF_PASSWORD] = 'REDACTED'
 
-        _LOGGER.warn("setup(): Configuration parameters: %s", tmp)
+        _LOGGER.debug("setup(): Configuration parameters: %s", tmp)
 
     from evohomeclient2 import EvohomeClient
     _LOGGER.warn("setup(): API call [4 request(s)]: client.__init__()...")       # noqa: E501; pylint: disable=line-too-long; ZXDEL
@@ -277,7 +277,7 @@ def setup(hass, hass_config):
         return False  # unable to continue
 
     if _LOGGER.isEnabledFor(logging.DEBUG):
-        _LOGGER.warn(
+        _LOGGER.debug(
             "setup(): The location (temperature control system) "
             "used is: %s [%s] (%s [%s])",
             evo_data['config']['locationInfo']['locationId'],
@@ -289,7 +289,7 @@ def setup(hass, hass_config):
         tmp_loc = dict(evo_data['config'])
         tmp_loc['locationInfo']['postcode'] = 'REDACTED'
 
-        _LOGGER.warn("setup(): evo_data['config']=%s", tmp_loc)
+        _LOGGER.debug("setup(): evo_data['config']=%s", tmp_loc)
 
     if evo_data['params'][CONF_USE_HEURISTICS]:
         _LOGGER.warning(
@@ -412,7 +412,7 @@ class EvoDevice(Entity):
     @property
     def name(self) -> str:
         """Return the name to use in the frontend UI."""
-        _LOGGER.warn("name(%s) = %s", self._id, self._name)                      # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("name(%s) = %s", self._id, self._name)                      # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._name
 
     @property
@@ -428,7 +428,7 @@ class EvoDevice(Entity):
         The evohome Controller will inform its children when to update(),
         evohome child devices should never be polled.
         """
-        _LOGGER.warn("should_poll(%s) = %s", self._id, self._type == EVO_PARENT)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("should_poll(%s) = %s", self._id, self._type == EVO_PARENT)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._type == EVO_PARENT
 
     @property
@@ -476,7 +476,7 @@ class EvoDevice(Entity):
                 self._timers
             )
 
-        _LOGGER.warn("available(%s) = %s", self._id, self._available)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("available(%s) = %s", self._id, self._available)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._available
 
     @property
@@ -487,7 +487,7 @@ class EvoDevice(Entity):
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
         feats = self._supported_features
-        _LOGGER.warn("supported_features(%s) = %s", self._id, feats)             # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("supported_features(%s) = %s", self._id, feats)             # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._supported_features
 
     @property
@@ -497,13 +497,13 @@ class EvoDevice(Entity):
         Note that, for evohome, the operating mode is determined by - but not
         equivalent to - the last operation (from the operation list).
         """
-        _LOGGER.warn("operation_list(%s) = %s", self._id, self._operation_list)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("operation_list(%s) = %s", self._id, self._operation_list)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._operation_list
 
     @property
     def temperature_unit(self):
         """Return the temperature unit to use in the frontend UI."""
-        _LOGGER.debug("temperature_unit(%s) = %s", self._id, TEMP_CELSIUS)       # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("temperature_unit(%s) = %s", self._id, TEMP_CELSIUS)       # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return TEMP_CELSIUS
 
     @property
@@ -518,7 +518,7 @@ class EvoDevice(Entity):
         elif self._type & EVO_DHW:
             precision = PRECISION_WHOLE
 
-        _LOGGER.debug("precision(%s) = %s", self._id, precision)                 # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("precision(%s) = %s", self._id, precision)                 # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return precision
 
     @property
@@ -534,7 +534,7 @@ class EvoDevice(Entity):
         else:  # self._type & EVO_DHW
             current_operation = self._status['stateStatus']['mode']
 
-        _LOGGER.warn("current_operation(%s) = %s", self._id, current_operation)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("current_operation(%s) = %s", self._id, current_operation)  # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return current_operation
 
     @property
@@ -550,7 +550,7 @@ class EvoDevice(Entity):
             temp = self._config['setpointCapabilities']['minHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 35
-        _LOGGER.debug("min_temp(%s) = %s", self._id, temp)                       # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("min_temp(%s) = %s", self._id, temp)                       # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return temp
 
     @property
@@ -566,7 +566,7 @@ class EvoDevice(Entity):
             temp = self._config['setpointCapabilities']['maxHeatSetpoint']
         elif self._type & EVO_DHW:
             temp = 85
-        _LOGGER.debug("max_temp(%s) = %s", self._id, temp)                       # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("max_temp(%s) = %s", self._id, temp)                       # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return temp
 
 
@@ -689,7 +689,7 @@ class EvoChildDevice(EvoDevice):
             data['switchpoints']['next'] = \
                 self._switchpoint(next_switchpoint=True)
 
-        _LOGGER.warn("device_state_attributes(%s) = %s", self._id, data)         # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("device_state_attributes(%s) = %s", self._id, data)         # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return data
 
     def async_set_operation_mode(self, operation_mode):
@@ -722,7 +722,7 @@ class EvoChildDevice(EvoDevice):
                 self._id
             )
 
-        _LOGGER.warn("current_temperature(%s) = %s", self._id, curr_temp)        # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("current_temperature(%s) = %s", self._id, curr_temp)        # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return curr_temp
 
     def update(self):
@@ -768,13 +768,13 @@ class EvoChildDevice(EvoDevice):
 
             if expired:  # timer expired, so update schedule
                 if self._type & EVO_ZONE:
-                    _LOGGER.debug(
+                    _LOGGER.warn(
                         "update(): API call [1 request(s)]: "
                         "zone(%s).schedule()...",
                         self._id
                     )
                 else:  # elif self._type & EVO_DHW:
-                    _LOGGER.debug(
+                    _LOGGER.warn(
                         "update(): API call [1 request(s)]: "
                         "dhw(%s).schedule()...",
                         self._id

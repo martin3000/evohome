@@ -168,7 +168,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     self._status['setpointStatus']['setpointMode']
                 )
         else:
-            _LOGGER.warn("state(%s) = %s", self._id, state)
+            _LOGGER.debug("state(%s) = %s", self._id, state)
         return state
 
     def _set_temperature(self, temperature, until=None):
@@ -212,7 +212,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             )
             return False
 
-        _LOGGER.debug(
+        _LOGGER.warn(
             "_set_temperature(): API call [1 request(s)]: "
             "zone(%s).set_temperature(%s, %s)...",
             self._id,
@@ -327,7 +327,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                     operation_mode
                 )
 
-            _LOGGER.debug(
+            _LOGGER.warn(
                 "set_operation_mode(%s): API call [1 request(s)]: "
                 "zone.cancel_temp_override()...",
                 self._id
@@ -509,8 +509,16 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         """
         step = self._config['setpointCapabilities']['valueResolution']
 #       step = PRECISION_HALVES
-        _LOGGER.warn("target_temperature_step(%s) = %s", self._id, step)
+        _LOGGER.debug("target_temperature_step(%s) = %s", self._id, step)
         return step
+
+    def turn_off(self):
+        """Turn device of."""
+        self._set_temperature(self.min_temp, until=None)
+
+    def turn_on(self):
+        """Turn device on."""
+        self.set_operation_mode(EVO_FOLLOW)
 
 
 class EvoController(EvoDevice, ClimateDevice):
@@ -542,19 +550,19 @@ class EvoController(EvoDevice, ClimateDevice):
             SUPPORT_AWAY_MODE
 
         if _LOGGER.isEnabledFor(logging.DEBUG):
-            _LOGGER.warn(
+            _LOGGER.debug(
                 "__init__(%s), self._params = %s",
                 self._id + " [" + self._name + "]",
                 self._params
             )
-            _LOGGER.warn(
+            _LOGGER.debug(
                 "__init__(%s), self._timers = %s",
                 self._id + " [" + self._name + "]",
                 self._timers
             )
             config = dict(self._config)
             config['zones'] = '...'
-            _LOGGER.warn(
+            _LOGGER.debug(
                 "__init__(%s), self.config = %s",
                 self._id + " [" + self._name + "]",
                 config
@@ -572,7 +580,7 @@ class EvoController(EvoDevice, ClimateDevice):
         else:  # usually = self.current_operation
             state = self.current_operation
 
-        _LOGGER.warn("state(%s) = %s", self._id, state)
+        _LOGGER.debug("state(%s) = %s", self._id, state)
         return state
 
     @property
@@ -614,7 +622,7 @@ class EvoController(EvoDevice, ClimateDevice):
 
 # PART 1: Call the api
         if operation_mode in list(TCS_STATE_TO_HA):
-            _LOGGER.debug(
+            _LOGGER.warn(
                 "set_operation_mode(): API call [1 request(s)]: "
                 "tcs._set_status(%s)...",
                 operation_mode
@@ -728,7 +736,7 @@ class EvoController(EvoDevice, ClimateDevice):
         loc_idx = self._params[CONF_LOCATION_IDX]
 
     # 1. Obtain latest state data (e.g. temps)...
-        _LOGGER.debug(
+        _LOGGER.warn(
             "_update_state_data(): API call [1 request(s)]: "
             "client.locations[loc_idx].status()..."
         )
@@ -912,7 +920,7 @@ class EvoController(EvoDevice, ClimateDevice):
                  for zone in self._status['zones']]
         avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
-        _LOGGER.warn("target_temperature(%s) = %s", self._id, avg_temp)
+        _LOGGER.debug("target_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
 
     @property
@@ -924,5 +932,5 @@ class EvoController(EvoDevice, ClimateDevice):
         temps = [zone['temperatureStatus']['temperature'] for zone in tmp_dict]
         avg_temp = round(sum(temps) / len(temps), 1) if temps else None
 
-        _LOGGER.warn("current_temperature(%s) = %s", self._id, avg_temp)
+        _LOGGER.debug("current_temperature(%s) = %s", self._id, avg_temp)
         return avg_temp
