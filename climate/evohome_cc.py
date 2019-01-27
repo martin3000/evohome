@@ -509,15 +509,17 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         """
         step = self._config['setpointCapabilities']['valueResolution']
 #       step = PRECISION_HALVES
-        _LOGGER.debug("target_temperature_step(%s) = %s", self._id, step)
+#       _LOGGER.debug("target_temperature_step(%s) = %s", self._id, step)
         return step
 
     def turn_off(self):
         """Turn device of."""
+        _LOGGER.debug("turn_off(%s)", self._id)
         self._set_temperature(self.min_temp, until=None)
 
     def turn_on(self):
         """Turn device on."""
+        _LOGGER.debug("turn_on(%s)", self._id)
         self.set_operation_mode(EVO_FOLLOW)
 
 

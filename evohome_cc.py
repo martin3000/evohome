@@ -476,7 +476,7 @@ class EvoDevice(Entity):
                 self._timers
             )
 
-        _LOGGER.debug("available(%s) = %s", self._id, self._available)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("available(%s) = %s", self._id, self._available)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._available
 
     @property
@@ -487,7 +487,7 @@ class EvoDevice(Entity):
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
         feats = self._supported_features
-        _LOGGER.debug("supported_features(%s) = %s", self._id, feats)             # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("supported_features(%s) = %s", self._id, feats)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._supported_features
 
     @property
