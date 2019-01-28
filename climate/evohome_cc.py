@@ -1,7 +1,7 @@
-"""Support for Climate devices of (EMEA/EU-based) Honeywell evohome systems.
+"""Support for Climate devices of (EMEA/EU) Honeywell evohome systems.
 
-Support for a temperature control system (TCS, controller) with 0+ heating
-zones (e.g. TRVs, relays).
+Specifically supports a temperature control system (TCS, controller) with 0-12
+heating zones (e.g. TRVs, relays).
 
 For more details about this platform, please refer to the documentation at
 https://github.com/zxdavb/evohome/
@@ -46,19 +46,17 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_platform(hass, hass_config, async_add_entities,
                                discovery_info=None):
-    """Create the evohome Controller, and its Zones, if any."""
+    """Create the Controller, and its Zones, if any."""
     evo_data = hass.data[DATA_EVOHOME]
 
     client = evo_data['client']
     loc_idx = evo_data['params'][CONF_LOCATION_IDX]
 
-    # evohomeclient has exposed no means of accessing non-default location
-    # (i.e. loc_idx > 0) other than using a protected member, such as below
     tcs_obj_ref = client.locations[loc_idx]._gateways[0]._control_systems[0]    # noqa E501; pylint: disable=protected-access
 
-    _LOGGER.debug(
-        "setup_platform(): Found Controller, id=%s [%s], "
-        "name=%s (location_idx=%s)",
+    _LOGGER.info(
+        "setup_platform(): Found Controller, id=%s (%s), name=%s "
+        "(location_idx=%s)",
         tcs_obj_ref.systemId,
         tcs_obj_ref.modelType,
         tcs_obj_ref.location.name,
@@ -70,22 +68,19 @@ async def async_setup_platform(hass, hass_config, async_add_entities,
 
     for zone_idx in tcs_obj_ref.zones:
         zone_obj_ref = tcs_obj_ref.zones[zone_idx]
-        _LOGGER.debug(
-            "setup_platform(): Found Zone, id=%s [%s], "
-            "name=%s",
+        _LOGGER.info(
+            "setup_platform(): Found Zone, id=%s (%s), name=%s",
             zone_obj_ref.zoneId,
             zone_obj_ref.zone_type,
             zone_obj_ref.name
         )
         zones.append(EvoZone(evo_data, client, zone_obj_ref))
 
-    entities = [controller] + zones
-
-    async_add_entities(entities, update_before_add=False)
+    async_add_entities([controller] + zones, update_before_add=False)
 
 
 class EvoZone(EvoChildDevice, ClimateDevice):
-    """Base for a Honeywell evohome heating zone (e.g. a TRV)."""
+    """Base for a Honeywell evohome heating Zone (e.g. a TRV)."""
 
     # pylint: disable=abstract-method
 
@@ -99,7 +94,6 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                 break
 
         self._operation_list = ZONE_OP_LIST
-        # lf._config['setpointCapabilities']['allowedSetpointModes']
         self._supported_features = \
             SUPPORT_OPERATION_MODE | \
             SUPPORT_TARGET_TEMPERATURE | \
@@ -524,7 +518,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
 
 class EvoController(EvoDevice, ClimateDevice):
-    """Base for a Honeywell evohome hub/Controller device.
+    """Base for a Honeywell evohome Controller (hub) device.
 
     The Controller (aka TCS, temperature control system) is the parent of all
     the child (CH/DHW) devices.  It is also a Climate device.

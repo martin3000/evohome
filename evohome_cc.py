@@ -486,7 +486,7 @@ class EvoDevice(Entity):
 # fashion, even though evohome's implementation of these modes are subtly
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
-        feats = self._supported_features
+#       feats = self._supported_features
 #       _LOGGER.debug("supported_features(%s) = %s", self._id, feats)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._supported_features
 
@@ -580,13 +580,14 @@ class EvoChildDevice(EvoDevice):
         super().__init__(evo_data, client, obj_ref)
 
         self._id = obj_ref.zoneId  # is also: obj_ref.dhwId
-        self._name = obj_ref.name
 
         if self._obj.zone_type == 'temperatureZone':
+            self._name = obj_ref.name
             self._type = EVO_CHILD | EVO_ZONE
             self._icon = "mdi:radiator"
 
         elif self._obj.zone_type == 'domesticHotWater':
+            self._name = "~DHW"
             self._type = EVO_CHILD | EVO_DHW
             self._icon = "mdi:thermometer-lines"
 

@@ -1,49 +1,79 @@
-"""Support for Honeywell evohome (EMEA/EU-based systems only).
+"""Support for WaterHeater devices of (EMEA/EU) Honeywell evohome systems.
 
-Support for a temperature control system (TCS, controller) with 0+ heating
-zones (e.g. TRVs, relays) and, optionally, a DHW controller.
+Specifically supports a DHW controller (the temperature control system is
+supported as a Climate device).
 
 For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/evohome/
+https://github.com/zxdavb/evohome/
 """
+# pylint: disable=deprecated-method, unused-import; ZXDEL
 
+from datetime import datetime, timedelta
 import logging
 
-from custom_components.evohome_cc import (
-    EvoBoiler,
-    DATA_EVOHOME,
-)
+import requests.exceptions
 
+from homeassistant.components.climate import (
+    SUPPORT_AWAY_MODE, SUPPORT_ON_OFF, SUPPORT_OPERATION_MODE,
+    SUPPORT_TARGET_TEMPERATURE,
+
+    ClimateDevice
+)
+from homeassistant.const import (
+    CONF_SCAN_INTERVAL,
+    STATE_OFF, STATE_ON,
+    ATTR_TEMPERATURE,
+)
+from custom_components.evohome_cc import (
+    STATE_AUTO, STATE_ECO, STATE_MANUAL,
+
+    DATA_EVOHOME, DISPATCHER_EVOHOME,
+    CONF_LOCATION_IDX, CONF_HIGH_PRECISION, CONF_USE_HEURISTICS,
+    CONF_USE_SCHEDULES, CONF_AWAY_TEMP, CONF_OFF_TEMP,
+    CONF_DHW_TEMP, DHW_STATES,
+
+    GWS, TCS, EVO_PARENT, EVO_CHILD, EVO_ZONE, EVO_DHW,
+
+    EVO_RESET, EVO_AUTO, EVO_AUTOECO, EVO_AWAY, EVO_DAYOFF, EVO_CUSTOM,
+    EVO_HEATOFF, EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER, EVO_FROSTMODE,
+
+    TCS_STATE_TO_HA, HA_STATE_TO_TCS, TCS_OP_LIST,
+    ZONE_STATE_TO_HA, HA_STATE_TO_ZONE, ZONE_OP_LIST,
+
+    EvoDevice, EvoChildDevice,
+)
+ATTR_UNTIL = 'until'
 _LOGGER = logging.getLogger(__name__)
 
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
+async def async_setup_platform(hass, hass_config, async_add_entities,
+                               discovery_info=None):
     """Create the DHW controller."""
     evo_data = hass.data[DATA_EVOHOME]
-    entities = [evo_data['dhw']]
 
-# 3/3: Collect any (child) DHW controller as a water_heater component
-    if tcs_obj_ref.hotwater:
-        _LOGGER.info(
-            "setup(): Found DHW device, id: %s, type: %s",
-            tcs_obj_ref.hotwater.zoneId,  # same has .dhwId
-            tcs_obj_ref.hotwater.zone_type
-        )
-        dhw = EvoBoiler(hass, client, tcs_obj_ref.hotwater)
-        evo_data['dhw'] = dhw
+    client = evo_data['client']
+    loc_idx = evo_data['params'][CONF_LOCATION_IDX]
 
-    parent._children = zones + [dhw]
+    tcs_obj_ref = client.locations[loc_idx]._gateways[0]._control_systems[0]    # noqa E501; pylint: disable=protected-access
 
-    add_entities(entities, update_before_add=False)
+    _LOGGER.info(
+        "setup(): Found DHW device, id: %s (%s)",
+        tcs_obj_ref.hotwater.zoneId,  # same has .dhwId
+        tcs_obj_ref.hotwater.zone_type
+    )
 
-    return True
+    dhw = EvoDHW(evo_data, client, tcs_obj_ref.hotwater)
+
+    async_add_entities([dhw], update_before_add=False)
 
 
-class EvoDHW(EvoChildEntity, WaterHeaterDevice):
+class EvoDHW(EvoChildDevice, ClimateDevice):
     """Base for a Honeywell evohome DHW controller (aka boiler)."""
 
+    # pylint: disable=abstract-method
+
     def __init__(self, evo_data, client, obj_ref):
-        """Initialize the evohome Zone."""
+        """Initialize the evohome DHW controller."""
         super().__init__(evo_data, client, obj_ref)
 
         self._config = evo_data['config'][GWS][0][TCS][0]['dhw']
@@ -121,7 +151,7 @@ class EvoDHW(EvoChildEntity, WaterHeaterDevice):
         try:
             self._obj._set_dhw(data)                                            # noqa: E501; pylint: disable=protected-access
 
-        except HTTPError as err:
+        except requests.exceptions.HTTPError as err:
             if not self._handle_exception(err):
                 raise
 
@@ -149,10 +179,8 @@ class EvoDHW(EvoChildEntity, WaterHeaterDevice):
 
         if dhw_state == DHW_STATES[STATE_ON]:
             state = STATE_ON
-        elif dhw_state == DHW_STATES[STATE_OFF]:
+        else:  # dhw_state == DHW_STATES[STATE_OFF]:
             state = STATE_OFF
-        else:
-            state = STATE_UNKNOWN
 
         # If possible, use inheritance to override reported state
         if dhw_op_mode == EVO_FOLLOW:
@@ -193,15 +221,11 @@ class EvoDHW(EvoChildEntity, WaterHeaterDevice):
         _LOGGER.debug("is_on(%s) = %s", self._id, is_on)
         return is_on
 
-    def async_turn_on(self, mode, until):
-        """Provide an async wrapper for self.turn_on().
-
-        Note the underlying method is not asyncio-friendly.
-        """
-        return self.hass.async_add_job(self.turn_on, mode, until)
-
-    def turn_on(self, mode=EVO_TEMPOVER, until=None):
+    def turn_on(self):
         """Turn DHW on for an hour, until next setpoint, or indefinitely."""
+        mode = EVO_TEMPOVER
+        until = None
+
         _LOGGER.debug(
             "turn_on(%s, mode=%s, until=%s)",
             self._id,
@@ -211,15 +235,11 @@ class EvoDHW(EvoChildEntity, WaterHeaterDevice):
 
         self._set_dhw_state(DHW_STATES[STATE_ON], mode, until)
 
-    def async_turn_off(self, mode, until):
-        """Provide an async wrapper for self.turn_off().
-
-        Note the underlying method is not asyncio-friendly.
-        """
-        return self.hass.async_add_job(self.turn_off, mode, until)
-
-    def turn_off(self, mode=EVO_TEMPOVER, until=None):
+    def turn_off(self):
         """Turn DHW off for an hour, until next setpoint, or indefinitely."""
+        mode = EVO_TEMPOVER
+        until = None
+
         _LOGGER.debug(
             "turn_off(%s, mode=%s, until=%s)",
             self._id,
@@ -228,13 +248,6 @@ class EvoDHW(EvoChildEntity, WaterHeaterDevice):
         )
 
         self._set_dhw_state(DHW_STATES[STATE_OFF], mode, until)
-
-    def async_set_operation_mode(self, operation_mode):
-        """Provide an async wrapper for self.set_operation_mode().
-
-        Note the underlying method is not asyncio-friendly.
-        """
-        return self.hass.async_add_job(self.set_operation_mode, operation_mode)
 
     def set_operation_mode(self, operation_mode):
         """Set new operation mode for a DHW controller."""
