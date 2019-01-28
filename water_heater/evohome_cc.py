@@ -92,11 +92,8 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
 
     @property
     def target_temperature(self):
-        """Return None, as there is no target temp exposed via the api."""
-        evo_data = self.hass.data[DATA_EVOHOME]
-
-        temp = evo_data['params'][CONF_DHW_TEMP]
-        temp = self.current_temperature  # a hack
+        """TBD: Return None, as there is no target temp exposed via the api."""
+        temp = self._params[CONF_DHW_TEMP]
 
         _LOGGER.warn("target_temperature(%s) = %s", self._id, temp)
         return temp
@@ -115,7 +112,7 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
             - next setpoint for TemporaryOverride if using schedules
             - ignored for PermanentOverride
         """
-        _LOGGER.debug(
+        _LOGGER.warn(
             "DHW._set_dhw_state(%s): state=%s, mode=%s, until=%s",
             self._id,
             state,
@@ -142,7 +139,7 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
 
         data = {'State': state, 'Mode': mode, 'UntilTime': until}
 
-        _LOGGER.debug(
+        _LOGGER.warn(
             "_set_dhw_state(%s): API call [1 request(s)]: dhw._set_dhw(%s)...",
             self._id,
             data
@@ -218,7 +215,7 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
         """Return True if DHW is on (albeit regulated by thermostat)."""
         is_on = (self.state == DHW_STATES[STATE_ON])
 
-        _LOGGER.debug("is_on(%s) = %s", self._id, is_on)
+        _LOGGER.warn("is_on(%s) = %s", self._id, is_on)
         return is_on
 
     def turn_on(self):
@@ -226,7 +223,7 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
         mode = EVO_TEMPOVER
         until = None
 
-        _LOGGER.debug(
+        _LOGGER.warn(
             "turn_on(%s, mode=%s, until=%s)",
             self._id,
             mode,
@@ -240,7 +237,7 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
         mode = EVO_TEMPOVER
         until = None
 
-        _LOGGER.debug(
+        _LOGGER.warn(
             "turn_off(%s, mode=%s, until=%s)",
             self._id,
             mode,
@@ -251,7 +248,7 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
 
     def set_operation_mode(self, operation_mode):
         """Set new operation mode for a DHW controller."""
-        _LOGGER.debug(
+        _LOGGER.warn(
             "set_operation_mode(%s, operation_mode=%s)",
             self._id,
             operation_mode
