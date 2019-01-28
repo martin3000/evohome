@@ -14,10 +14,12 @@ import logging
 import requests.exceptions
 
 from homeassistant.components.climate import (
-    SUPPORT_AWAY_MODE, SUPPORT_ON_OFF, SUPPORT_OPERATION_MODE,
-    SUPPORT_TARGET_TEMPERATURE,
-
+    SUPPORT_ON_OFF,
     ClimateDevice
+)
+from homeassistant.components.water_heater import (
+    SUPPORT_AWAY_MODE, SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
+    WaterHeaterDevice
 )
 from homeassistant.const import (
     CONF_SCAN_INTERVAL,
@@ -67,7 +69,7 @@ async def async_setup_platform(hass, hass_config, async_add_entities,
     async_add_entities([dhw], update_before_add=False)
 
 
-class EvoDHW(EvoChildDevice, ClimateDevice):
+class EvoDHW(EvoChildDevice, WaterHeaterDevice):
     """Base for a Honeywell evohome DHW controller (aka boiler)."""
 
     # pylint: disable=abstract-method
@@ -203,12 +205,6 @@ class EvoDHW(EvoChildDevice, ClimateDevice):
         else:
             _LOGGER.debug("state(%s) = %s", self._id, state)
         return state
-
-#   @property
-#   def unit_of_measurement(self):
-#       """Return the unit of measurement of this entity, if any."""
-#       # this is needed for EvoBoiler(Entity) class to show a graph of temp
-#       return TEMP_CELSIUS
 
     @property
     def is_on(self):

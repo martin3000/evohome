@@ -486,8 +486,8 @@ class EvoDevice(Entity):
 # fashion, even though evohome's implementation of these modes are subtly
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
-#       feats = self._supported_features
-#       _LOGGER.debug("supported_features(%s) = %s", self._id, feats)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        feats = self._supported_features
+        _LOGGER.warn("supported_features(%s) = %s", self._id, feats)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._supported_features
 
     @property
