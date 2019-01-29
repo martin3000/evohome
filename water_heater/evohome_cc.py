@@ -14,11 +14,11 @@ import logging
 import requests.exceptions
 
 from homeassistant.components.climate import (
-    SUPPORT_ON_OFF,
     ClimateDevice
 )
 from homeassistant.components.water_heater import (
     SUPPORT_AWAY_MODE, SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
+    SUPPORT_ON_OFF,
     WaterHeaterDevice
 )
 from homeassistant.const import (

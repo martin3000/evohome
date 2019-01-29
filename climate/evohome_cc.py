@@ -214,7 +214,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             until
         )
         try:
-            self._obj.set_temperature(temperature)
+            self._obj.set_temperature(temperature, until)
 
         except requests.exceptions.HTTPError as err:
             if not self._handle_exception(err):
@@ -228,8 +228,9 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         Only applies to heating zones, not DHW controllers (boilers).
         """
         _LOGGER.debug(
-            "set_temperature(%s, **kwargs)",
-            self._id + " [" + self._name + "]"
+            "set_temperature(%s, **kwargs=%s)",
+            self._id + " [" + self._name + "]",
+            kwargs.items()
         )
 
 #       for name, value in kwargs.items():
@@ -245,7 +246,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             )
             return False
 
-# if you change the temp on a evohome TRV, it is until next switchpoint
+# if you change the temp on via evohome, it is until next switchpoint, so...
         until = kwargs.get(ATTR_UNTIL)
         if until is None:
             # until either the next scheduled setpoint, or just 1 hour from now
@@ -305,7 +306,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
 
         _LOGGER.debug(
             "set_operation_mode(%s, OpMode=%s, Temp=%s, Until=%s)",
-            self._id,
+            self._id + " [" + self._name + "]",
             operation_mode,
             temperature,
             until
