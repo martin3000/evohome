@@ -14,13 +14,13 @@ import logging
 import requests.exceptions
 
 from homeassistant.components.climate import (
-    SUPPORT_AWAY_MODE,SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
+    SUPPORT_AWAY_MODE, SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
     SUPPORT_ON_OFF,
     ClimateDevice
 )
 from homeassistant.const import (
     CONF_SCAN_INTERVAL,
-    STATE_OFF, STATE_ON,
+    # STATE_OFF, STATE_ON,
     ATTR_TEMPERATURE,
 )
 from custom_components.evohome_cc import (
@@ -247,11 +247,12 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             return False
 
 # if you change the temp on via evohome, it is until next switchpoint, so...
-        until = kwargs.get(ATTR_UNTIL)
+        until = kwargs.get(ATTR_UNTIL)  # will be None as HA wont pass an until
+
         if until is None:
             # until either the next scheduled setpoint, or just 1 hour from now
             if self._params[CONF_USE_SCHEDULES]:
-                until = self._next_switchpoint_time
+                until = self._next_switchpoint_time()
             else:
                 until = datetime.now() + timedelta(hours=1)
 

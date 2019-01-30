@@ -643,22 +643,25 @@ class EvoChildDevice(EvoDevice):
                 switchpoint = day['Switchpoints'][idx]
                 switchpoint_date = day_time
 
-        # insert day_and_time of teh switchpoint for those who want it
+# TBD: remove this
+        # insert day_and_time of the switchpoint for those who want it
         switchpoint['DateAndTime'] = switchpoint_date.strftime('%Y/%m/%d') + \
             " " + switchpoint['TimeOfDay']
 
-#       _LOGGER.debug("_switchpoint(%s) = %s", self._id, switchpoint)
+        _LOGGER.warn("_switchpoint(%s) = %s", self._id + " [" + self._name + "]", switchpoint)
         return switchpoint
 
-    def _next_switchpoint_time(self):
+    def _next_switchpoint_time(self) -> datetime:
         # until either the next scheduled setpoint, or just an hour from now
         if self._params[CONF_USE_SCHEDULES]:
             # get the time of the next scheduled setpoint (switchpoint)
             switchpoint = self._switchpoint(next_switchpoint=True)
             # convert back to a datetime object
-            until = datetime.strptime(switchpoint['DateAndTime'])
+            until = datetime.strptime(
+                switchpoint['DateAndTime'],'%Y/%m/%d %H:%M:%S'
+            )  # 'DateAndTime': '2019/01/30 19:10:00'
         else:
-            # there are no schedfules, so use an hour from now
+            # there are no schedules, so use an hour from now
             until = datetime.now() + timedelta(hours=1)
 
         return until
@@ -671,11 +674,12 @@ class EvoChildDevice(EvoDevice):
                 "schedule(%s): '%s' = False, so schedules are not retrieved "
                 "during update(). If schedules are required, set this "
                 "configuration parameter to True and restart HA.",
-                self._id,
+                self._id + " [" + self._name + "]",
                 CONF_USE_SCHEDULES
             )
             return None
 
+        _LOGGER.warn("schedule(%s) = %s", self._id, self._schedule['schedule'])
         return self._schedule['schedule']
 
     @property
@@ -690,7 +694,7 @@ class EvoChildDevice(EvoDevice):
             data['switchpoints']['next'] = \
                 self._switchpoint(next_switchpoint=True)
 
-        _LOGGER.debug("device_state_attributes(%s) = %s", self._id, data)         # noqa: E501; pylint: disable=line-too-long; ZXDEL
+        _LOGGER.debug("device_state_attributes(%s) = %s", self._id, data)        # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return data
 
     def async_set_operation_mode(self, operation_mode):
