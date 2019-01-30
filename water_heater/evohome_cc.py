@@ -13,36 +13,39 @@ import logging
 
 import requests.exceptions
 
-from homeassistant.components.climate import (
-    ClimateDevice
-)
+# from homeassistant.components.climate import (
+    # ClimateDevice
+# )
 from homeassistant.components.water_heater import (
-    SUPPORT_AWAY_MODE, SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
-    SUPPORT_ON_OFF,
+    # SUPPORT_AWAY_MODE, SUPPORT_TARGET_TEMPERATURE,
+    SUPPORT_OPERATION_MODE,
     WaterHeaterDevice
 )
 from homeassistant.const import (
-    CONF_SCAN_INTERVAL,
+#   CONF_SCAN_INTERVAL,
     STATE_OFF, STATE_ON,
     ATTR_TEMPERATURE,
 )
 from custom_components.evohome_cc import (
-    STATE_AUTO, STATE_ECO, STATE_MANUAL,
+    # STATE_AUTO, STATE_ECO, STATE_MANUAL,
 
     DATA_EVOHOME, DISPATCHER_EVOHOME,
-    CONF_LOCATION_IDX, CONF_HIGH_PRECISION, CONF_USE_HEURISTICS,
-    CONF_USE_SCHEDULES, CONF_AWAY_TEMP, CONF_OFF_TEMP,
+    CONF_LOCATION_IDX, CONF_USE_HEURISTICS, CONF_USE_SCHEDULES,
+    # CONF_AWAY_TEMP, CONF_HIGH_PRECISION, CONF_OFF_TEMP,
     CONF_DHW_TEMP, DHW_STATES,
 
-    GWS, TCS, EVO_PARENT, EVO_CHILD, EVO_ZONE, EVO_DHW,
+    GWS, TCS,
+    # EVO_PARENT, EVO_CHILD, EVO_ZONE, EVO_DHW,
 
-    EVO_RESET, EVO_AUTO, EVO_AUTOECO, EVO_AWAY, EVO_DAYOFF, EVO_CUSTOM,
-    EVO_HEATOFF, EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER, EVO_FROSTMODE,
+    EVO_AWAY,
+    # EVO_RESET, EVO_AUTO, EVO_AUTOECO, EVO_DAYOFF, EVO_CUSTOM, EVO_HEATOFF,
+    EVO_FOLLOW, EVO_TEMPOVER, EVO_PERMOVER, EVO_FROSTMODE,
 
     TCS_STATE_TO_HA, HA_STATE_TO_TCS, TCS_OP_LIST,
     ZONE_STATE_TO_HA, HA_STATE_TO_ZONE, ZONE_OP_LIST,
 
-    EvoDevice, EvoChildDevice,
+    # EvoDevice,
+    EvoChildDevice,
 )
 ATTR_UNTIL = 'until'
 _LOGGER = logging.getLogger(__name__)
@@ -83,8 +86,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
         self._operation_list = ZONE_OP_LIST
 
         self._supported_features = \
-            SUPPORT_OPERATION_MODE | \
-            SUPPORT_ON_OFF
+            SUPPORT_OPERATION_MODE
 
         _LOGGER.debug(
             "__init__(%s), self._config = %s",
