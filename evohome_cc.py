@@ -8,7 +8,7 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method; ZXDEL
 
-__version__ = '0.9.1'
+__version__ = '0.9.2'
 
 # Glossary:
 #   TCS - temperature control system (a.k.a. Controller, Parent), which can
@@ -650,7 +650,11 @@ class EvoChildDevice(EvoDevice):
         switchpoint['DateAndTime'] = switchpoint_date.strftime('%Y/%m/%d') + \
             " " + switchpoint['TimeOfDay']
 
-        _LOGGER.warn("_switchpoint(%s) = %s", self._id + " [" + self._name + "]", switchpoint)
+        _LOGGER.warn(
+            "_switchpoint(%s) = %s",
+            self._id + " [" + self._name + "]",
+            switchpoint
+        )
         return switchpoint
 
     def _next_switchpoint_time(self) -> datetime:
@@ -660,7 +664,7 @@ class EvoChildDevice(EvoDevice):
             switchpoint = self._switchpoint(next_switchpoint=True)
             # convert back to a datetime object
             until = datetime.strptime(
-                switchpoint['DateAndTime'],'%Y/%m/%d %H:%M:%S'
+                switchpoint['DateAndTime'], '%Y/%m/%d %H:%M:%S'
             )  # 'DateAndTime': '2019/01/30 19:10:00'
         else:
             # there are no schedules, so use an hour from now
@@ -792,7 +796,6 @@ class EvoChildDevice(EvoDevice):
                 try:
                     self._schedule['schedule'] = self._obj.schedule()
                 except requests.exceptions.RequestException as err:
-#               except requests.exceptions.HTTPError as err:
                     if not self._handle_exception(err):
                         raise
                 else:

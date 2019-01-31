@@ -8,7 +8,7 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method, unused-import; ZXDEL
 
-__version__ = '0.9.1'
+__version__ = '0.9.2'
 
 from datetime import datetime, timedelta
 import logging
@@ -26,7 +26,7 @@ from homeassistant.components.water_heater import (
 from homeassistant.const import (
 #   CONF_SCAN_INTERVAL,
     STATE_OFF, STATE_ON,
-    ATTR_TEMPERATURE,
+#   ATTR_TEMPERATURE,
 )
 from custom_components.evohome_cc import (
     # STATE_AUTO, STATE_ECO, STATE_MANUAL,
