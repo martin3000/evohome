@@ -791,7 +791,8 @@ class EvoChildDevice(EvoDevice):
 
                 try:
                     self._schedule['schedule'] = self._obj.schedule()
-                except requests.exceptions.HTTPError as err:
+                except requests.exceptions.RequestException as err:
+#               except requests.exceptions.HTTPError as err:
                     if not self._handle_exception(err):
                         raise
                 else:

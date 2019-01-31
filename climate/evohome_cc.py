@@ -219,7 +219,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
         try:
             self._obj.set_temperature(temperature, until)
 
-        except requests.exceptions.HTTPError as err:
+        except requests.exceptions.RequestException as err:
             if not self._handle_exception(err):
                 raise
 
@@ -334,7 +334,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
             try:
                 self._obj.cancel_temp_override(self._obj)
 
-            except requests.exceptions.HTTPError as err:
+            except requests.exceptions.RequestException as err:
                 if not self._handle_exception(err):
                     raise
 
@@ -634,9 +634,9 @@ class EvoController(EvoDevice, ClimateDevice):
 # self.client.locations[0]._gateways[0]._control_systems[0]._set_status(mode)
 # self._obj._set_status(mode)
             try:
-                self._obj._set_status(operation_mode)                           # noqa: E501; pylint: disable=protected-access
+                self._obj._set_status(operation_mode)                            # noqa: E501; pylint: disable=protected-access
 
-            except requests.exceptions.HTTPError as err:
+            except requests.exceptions.RequestException as err:
                 if not self._handle_exception(err):
                     raise
 
@@ -751,7 +751,7 @@ class EvoController(EvoDevice, ClimateDevice):
             evo_data['status'].update(  # or: evo_data['status'] =
                 client.locations[loc_idx].status()[GWS][0][TCS][0])
 
-        except requests.exceptions.HTTPError as err:
+        except requests.exceptions.RequestException as err:
             if not self._handle_exception(err):
                 raise
 
