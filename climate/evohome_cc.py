@@ -699,7 +699,7 @@ class EvoController(EvoDevice, ClimateDevice):
                 'signal': 'update',
                 'to': EVO_CHILD
             }
-            async_dispatcher_send(DISPATCHER_EVOHOME, pkt)
+            async_dispatcher_send(self.hass, DISPATCHER_EVOHOME, pkt)
 
 # At the end, the last thing to do is resume updates()
         self._should_poll = True
@@ -911,7 +911,7 @@ class EvoController(EvoDevice, ClimateDevice):
             'to': EVO_CHILD
         }
 
-        async_dispatcher_send(DISPATCHER_EVOHOME, pkt)
+        async_dispatcher_send(self.hass, DISPATCHER_EVOHOME, pkt)
 
         return True
 
