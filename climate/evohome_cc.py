@@ -794,8 +794,11 @@ class EvoController(EvoDevice, ClimateDevice):
                 # I think: DHW first (if any), then zones ordered by name
                 new_dict_list = list(ec1_api.temperatures(force_refresh=True))
 
-            except TypeError as err:
-                # Has api rate limit been exceeded?
+#           except requests.exceptions.RequestException as err:
+#               if not self._handle_exception(err):
+#                   raise
+
+            except TypeError as err:  # v1 api doesn't use raise_for_status()
                 if not self._handle_exception(err, err_hint=ec1_api.user_data):
                     # Or what else could it be?
                     _LOGGER.warning(
@@ -807,7 +810,9 @@ class EvoController(EvoDevice, ClimateDevice):
                         "TypeError: ec1_api.user_data = %s",
                         ec1_api.user_data
                     )
-                    raise
+
+#           except:
+#               raise  # we don't handle any other exceptions
 
             else:
                 _LOGGER.debug(
@@ -858,10 +863,11 @@ class EvoController(EvoDevice, ClimateDevice):
                 for i, j in zip(org_dict_list, new_dict_list):
                     i.update(j)
 
-        _LOGGER.debug(
-            "_update_state_data(): evo_data['status'] = %s",
-            evo_data['status']
-        )
+            finally:
+                _LOGGER.debug(
+                    "_update_state_data(): evo_data['status'] = %s",
+                    evo_data['status']
+                )
 
     def update(self):
         """Get the latest state data of the installation.
