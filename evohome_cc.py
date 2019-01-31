@@ -39,6 +39,8 @@ from homeassistant.helpers.dispatcher import (
 from homeassistant.helpers.entity import Entity
 # from homeassistant.helpers.temperature import display_temp as show_temp
 
+__version__ = '0.9.0'
+
 # QUIREMENTS = ['https://github.com/zxdavb/evohome-client/archive/debug-version.zip#evohomeclient==0.2.8']  # noqa: E501; pylint: disable=line-too-long; ZXDEL
 REQUIREMENTS = ['evohomeclient==0.2.8']
 

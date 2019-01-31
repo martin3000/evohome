@@ -48,6 +48,9 @@ from custom_components.evohome_cc import (
     EvoChildDevice,
 )
 ATTR_UNTIL = 'until'
+
+__version__ = '0.9.0'
+
 _LOGGER = logging.getLogger(__name__)
 
 
