@@ -8,6 +8,8 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method, unused-import; ZXDEL
 
+__version__ = '0.9.0'
+
 from datetime import datetime, timedelta
 import logging
 
@@ -48,8 +50,6 @@ from custom_components.evohome_cc import (
     EvoChildDevice,
 )
 ATTR_UNTIL = 'until'
-
-__version__ = '0.9.0'
 
 _LOGGER = logging.getLogger(__name__)
 

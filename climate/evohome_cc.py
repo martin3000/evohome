@@ -8,6 +8,8 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method, unused-import; ZXDEL
 
+__version__ = '0.9.1'
+
 from datetime import datetime, timedelta
 import logging
 
@@ -23,6 +25,7 @@ from homeassistant.const import (
     # STATE_OFF, STATE_ON,
     ATTR_TEMPERATURE,
 )
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from custom_components.evohome_cc import (
     STATE_AUTO, STATE_ECO, STATE_MANUAL,
 
@@ -41,8 +44,6 @@ from custom_components.evohome_cc import (
     EvoDevice, EvoChildDevice,
 )
 ATTR_UNTIL = 'until'
-
-__version__ = '0.9.0'
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -698,10 +699,7 @@ class EvoController(EvoDevice, ClimateDevice):
                 'signal': 'update',
                 'to': EVO_CHILD
             }
-            self.hass.helpers.dispatcher.async_dispatcher_send(
-                DISPATCHER_EVOHOME,
-                pkt
-            )
+            async_dispatcher_send(DISPATCHER_EVOHOME, pkt)
 
 # At the end, the last thing to do is resume updates()
         self._should_poll = True
@@ -913,10 +911,7 @@ class EvoController(EvoDevice, ClimateDevice):
             'to': EVO_CHILD
         }
 
-        self.hass.helpers.dispatcher.async_dispatcher_send(
-            DISPATCHER_EVOHOME,
-            pkt
-        )
+        async_dispatcher_send(DISPATCHER_EVOHOME, pkt)
 
         return True
 
