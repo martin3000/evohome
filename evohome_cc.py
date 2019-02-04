@@ -8,7 +8,7 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method; ZXDEL
 
-__version__ = '0.9.4'
+__version__ = '0.9.5'
 
 # Glossary:
 #   TCS - temperature control system (a.k.a. Controller, Parent), which can
@@ -489,7 +489,7 @@ class EvoDevice(Entity):
 # different - this will allow tight integration with the HA landscape e.g.
 # Alexa/Google integration
         feats = self._supported_features
-        _LOGGER.warn("supported_features(%s) = %s", self._id, feats)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
+#       _LOGGER.debug("supported_features(%s) = %s", self._id, feats)            # noqa: E501; pylint: disable=line-too-long; ZXDEL
         return self._supported_features
 
     @property

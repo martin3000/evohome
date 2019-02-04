@@ -4,5 +4,7 @@ This is a Home Assistant `custom_component` that supports Honeywell evohome mult
 
 ## 0.9.x - WIP
 
-Initial support for [custom_updater](https://github.com/custom-components/custom_updater/wiki/Installation) platform.
-Many improvements to exception handling (ignoring v1 api exceptions, warnings for ConnectionErrors).
+0.9.5 Remove some logspam.  Change name of TCS for compliance with HA slugify rules.
+
+0.9.2 Initial support for [custom_updater](https://github.com/custom-components/custom_updater/wiki/Installation) platform.  Many improvements to exception handling (ignoring v1 api exceptions, warnings for ConnectionErrors).
+

@@ -8,7 +8,7 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method, unused-import; ZXDEL
 
-__version__ = '0.9.4'
+__version__ = '0.9.5'
 
 from datetime import datetime, timedelta
 import logging
@@ -537,7 +537,7 @@ class EvoController(EvoDevice, ClimateDevice):
         super().__init__(evo_data, client, obj_ref)
 
         self._id = obj_ref.systemId
-        self._name = '_{}'.format(obj_ref.location.name)
+        self._name = obj_ref.location.name
         self._icon = "mdi:thermostat"
         self._type = EVO_PARENT
 

@@ -8,7 +8,7 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method, unused-import; ZXDEL
 
-__version__ = '0.9.4'
+__version__ = '0.9.5'
 
 from datetime import datetime, timedelta
 import logging
@@ -102,7 +102,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
         """TBD: Return None, as there is no target temp exposed via the api."""
         temp = self._params[CONF_DHW_TEMP]
 
-        _LOGGER.warn("target_temperature(%s) = %s", self._id, temp)
+        _LOGGER.debug("target_temperature(%s) = %s", self._id, temp)
         return temp
 
     def _set_dhw_state(self, state=None, mode=None, until=None):
@@ -120,7 +120,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
             - ignored for PermanentOverride
         """
         _LOGGER.warn(
-            "DHW._set_dhw_state(%s): state=%s, mode=%s, until=%s",
+            "_set_dhw_state(%s): state=%s, mode=%s, until=%s",
             self._id,
             state,
             mode,
@@ -216,7 +216,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
         """Return True if DHW is on (albeit regulated by thermostat)."""
         is_on = (self.state == DHW_STATES[STATE_ON])
 
-        _LOGGER.warn("is_on(%s) = %s", self._id, is_on)
+        _LOGGER.debug("is_on(%s) = %s", self._id, is_on)
         return is_on
 
     def turn_on(self):
@@ -224,7 +224,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
         mode = EVO_TEMPOVER
         until = None
 
-        _LOGGER.warn(
+        _LOGGER.debug(
             "turn_on(%s, mode=%s, until=%s)",
             self._id,
             mode,
@@ -238,7 +238,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
         mode = EVO_TEMPOVER
         until = None
 
-        _LOGGER.warn(
+        _LOGGER.debug(
             "turn_off(%s, mode=%s, until=%s)",
             self._id,
             mode,
@@ -249,7 +249,7 @@ class EvoDHW(EvoChildDevice, WaterHeaterDevice):
 
     def set_operation_mode(self, operation_mode):
         """Set new operation mode for a DHW controller."""
-        _LOGGER.warn(
+        _LOGGER.debug(
             "set_operation_mode(%s, operation_mode=%s)",
             self._id,
             operation_mode
