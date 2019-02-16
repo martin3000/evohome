@@ -16,7 +16,7 @@ This is a Home Assistant `custom_component` that supports **Honeywell evohome** 
 
 It supports a Honeywell evohome controller with multiple heating zones and (optionally) a DHW controller.  
 
-You can choose _which_ location with `location_idx:` (most people will have only one location), and you can even have multiple _concurrent_ locations/logins with the following work-around: https://github.com/zxdavb/evohome/issues/10
+If you are one of the privilegded few with multiple evohome locations, you can choose _which_ location with `location_idx:`, and you can even have multiple _concurrent_ locations/logins with the following work-around: https://github.com/zxdavb/evohome/issues/10
 
 #### Other Versions of this Component
 
