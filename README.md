@@ -1,30 +1,38 @@
+##### Warning
+
+This custom component has been re-written for HA's new scheme/structure for custom components from version 0.88/0.89 onwards - it will likely not work with old versions of HA.
+
+|**Old Folder Structure**|**New Folder Structure**
+|---|---
+```custom_components/evohome_cc.py```|```custom_components/evohome_cc/__init__.py```
+```custom_components/climate/evohome_cc.py```|```custom_components/evohome_cc/climate.py```
+```custom_components/water_heater/evohome_cc.py```|```custom_components/evohome_cc/water_heater.py```
+
+Notice also that the `logger:` and `custom_updater:` sections of your `configuration.yaml` may need updating. 
+
 # HA Custom Component for Honeywell evohome
 
-This is a Home Assistant `custom_component` that supports Honeywell evohome multi-zone heating systems (EU-only).
+This is a Home Assistant `custom_component` that supports **Honeywell evohome** multi-zone heating systems (EU-only).  It _will not_ work with US-based systems (it is written to utilize the EU-based API only, see: https://github.com/watchforstock/evohome-client).
 
-It supports a single Honeywell evohome installation: one controller, multiple heating zones and (optionally) a DHW controller.  It _will not_ work with US-based systems (it is written to utilize the EU-based API only, see: https://github.com/watchforstock/evohome-client).
+It supports a Honeywell evohome controller with multiple heating zones and (optionally) a DHW controller.  
+
+You can choose _which_ location with `location_idx:` (most people will have only one location), and you can even have multiple _concurrent_ locations/logins with the following work-around: https://github.com/zxdavb/evohome/issues/10
 
 ## Other Versions of this Component
 
-This is the `custom_component` version of HA's official evohome component (see: https://home-assistant.io/components/evohome).  It includes much functionality that is not yet - or will never be - supported by HA.  There are good reasons why you may choose to run this concurrently with the official version (see below for more detail).
+This is the `custom_component` version of HA's official evohome component (see: https://home-assistant.io/components/evohome).  It may include functionality that is not yet - or will never be - supported by HA.  There are good reasons why you may choose to run this _concurrently_ with the official version (see below for more detail).
 
 You _could_ even run it alongside HA's older `honeywell` component (see: https://home-assistant.io/components/climate.honeywell), although I believe there is little reason for doing so.
 
-There is support for multiple locations/logins.  Use can choose _which_ location with `location_idx:`, and you can even have multiple concurrent locations/logins with the following work-around: https://github.com/zxdavb/evohome/issues/10
-
 ## Installation instructions
 
-You must be running HA v0.89.0 (?) or later (it has a new scheme for custom_components).  
-
-You must be running HA v0.84.0 or later (it has an updated `evohomeclient`).  
+You must be running HA v0.88 / v0.89 (TBA) or later - it has a new scheme for custom_components directory stuctures.  
 
 Make the following changes to your existing installation of HA:
  1. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git evohome_cc`
  2. Edit `configuration.yaml` as below.  I recommend 300 seconds, and `high_precision: true` (both are defaults). YMMV with heuristics/schedules.
- 3. If/when required, update the git by executing something like: `git pull`
+ 3. To keep your component up to date, there are two options: a) manually (e.g. via `git pull`), or b) using the custom component updater (https://github.com/custom-components/custom_updater), which is preferred.
  
-You will need to do 1) & 2) only once if you use `git`.  You will need to redo 3) as often as the git is updated.
-
 ### Post-Installation checklist
 
 TBD
@@ -71,8 +79,8 @@ If required, you can add logging as below (make sure you don't end up with two `
 logger:
   logs:
     custom_components.evohome_cc: debug
-    custom_components.climate.evohome_cc: debug
-    custom_components.water_heater.evohome_cc: debug
+    custom_components.evohome_cc.climate: debug
+    custom_components.evohome_cc.water_heater: debug
 #   evohomeclient2: warn
 ```
 
