@@ -15,20 +15,18 @@ import logging
 
 import requests.exceptions
 
-# from homeassistant.components.climate import (
-    # ClimateDevice
-# )
+# from homeassistant.components.climate import ClimateDevice
+from homeassistant.components.water_heater import WaterHeaterDevice
 from homeassistant.components.water_heater import (
     # SUPPORT_AWAY_MODE, SUPPORT_TARGET_TEMPERATURE,
     SUPPORT_OPERATION_MODE,
-    WaterHeaterDevice
 )
 from homeassistant.const import (
-#   CONF_SCAN_INTERVAL,
+#   ATTR_TEMPERATURE, CONF_SCAN_INTERVAL,
     STATE_OFF, STATE_ON,
-#   ATTR_TEMPERATURE,
 )
 from custom_components.evohome_cc import (
+    ATTR_UNTIL,
     # STATE_AUTO, STATE_ECO, STATE_MANUAL,
 
     DATA_EVOHOME, DISPATCHER_EVOHOME,
@@ -49,7 +47,6 @@ from custom_components.evohome_cc import (
     # EvoDevice,
     EvoChildDevice,
 )
-ATTR_UNTIL = 'until'
 
 _LOGGER = logging.getLogger(__name__)
 

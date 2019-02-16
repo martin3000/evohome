@@ -15,18 +15,18 @@ import logging
 
 import requests.exceptions
 
-from homeassistant.components.climate import (
-    SUPPORT_AWAY_MODE, SUPPORT_OPERATION_MODE, SUPPORT_TARGET_TEMPERATURE,
-    SUPPORT_ON_OFF,
-    ClimateDevice
+from homeassistant.components.climate import ClimateDevice
+from homeassistant.components.climate.const import (
+    SUPPORT_AWAY_MODE, SUPPORT_TARGET_TEMPERATURE,
+    SUPPORT_ON_OFF, SUPPORT_OPERATION_MODE,
 )
 from homeassistant.const import (
-    CONF_SCAN_INTERVAL,
-    # STATE_OFF, STATE_ON,
-    ATTR_TEMPERATURE,
+    ATTR_TEMPERATURE, CONF_SCAN_INTERVAL,
+    STATE_OFF, STATE_ON,
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from custom_components.evohome_cc import (
+    ATTR_UNTIL,
     STATE_AUTO, STATE_ECO, STATE_MANUAL,
 
     DATA_EVOHOME, DISPATCHER_EVOHOME,
@@ -43,7 +43,6 @@ from custom_components.evohome_cc import (
 
     EvoDevice, EvoChildDevice,
 )
-ATTR_UNTIL = 'until'
 
 _LOGGER = logging.getLogger(__name__)
 
