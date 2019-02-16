@@ -14,8 +14,12 @@ There is support for multiple locations/logins.  Use can choose _which_ location
 
 ## Installation instructions
 
-You must be running HA v0.84.0 or later (it has an updated `evohomeclient`).  Make the following changes to your existing installation of HA:
- 1. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git custom_components`
+You must be running HA v0.89.0 (?) or later (it has a new scheme for custom_components).  
+
+You must be running HA v0.84.0 or later (it has an updated `evohomeclient`).  
+
+Make the following changes to your existing installation of HA:
+ 1. Download this git into the `custom_components` folder (which is under the folder containing `configuration.yaml`) by executing something like: `git clone https://github.com/zxdavb/evohome.git evohome_cc`
  2. Edit `configuration.yaml` as below.  I recommend 300 seconds, and `high_precision: true` (both are defaults). YMMV with heuristics/schedules.
  3. If/when required, update the git by executing something like: `git pull`
  
