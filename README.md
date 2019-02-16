@@ -1,6 +1,6 @@
-##### Warning
-
-This custom component has been re-written for HA's new scheme/structure for custom components from version 0.88/0.89 onwards - it will likely not work with old versions of HA.
+> ### Warning
+>
+> This custom component has been re-written for HA's new scheme/structure for custom components from version 0.88/0.89 onwards - it will likely not work with old versions of HA.
 
 |**Old Folder Structure**|**New Folder Structure**
 |---|---
@@ -10,7 +10,7 @@ This custom component has been re-written for HA's new scheme/structure for cust
 
 Notice also that the `logger:` and `custom_updater:` sections of your `configuration.yaml` may need updating. 
 
-# HA Custom Component for Honeywell evohome
+## HA Custom Component for Honeywell evohome
 
 This is a Home Assistant `custom_component` that supports **Honeywell evohome** multi-zone heating systems (EU-only).  It _will not_ work with US-based systems (it is written to utilize the EU-based API only, see: https://github.com/watchforstock/evohome-client).
 
@@ -18,13 +18,13 @@ It supports a Honeywell evohome controller with multiple heating zones and (opti
 
 You can choose _which_ location with `location_idx:` (most people will have only one location), and you can even have multiple _concurrent_ locations/logins with the following work-around: https://github.com/zxdavb/evohome/issues/10
 
-## Other Versions of this Component
+#### Other Versions of this Component
 
 This is the `custom_component` version of HA's official evohome component (see: https://home-assistant.io/components/evohome).  It may include functionality that is not yet - or will never be - supported by HA.  There are good reasons why you may choose to run this _concurrently_ with the official version (see below for more detail).
 
 You _could_ even run it alongside HA's older `honeywell` component (see: https://home-assistant.io/components/climate.honeywell), although I believe there is little reason for doing so.
 
-## Installation instructions
+### Installation instructions
 
 You must be running HA v0.88 / v0.89 (TBA) or later - it has a new scheme for custom_components directory stuctures.  
 
@@ -33,11 +33,11 @@ Make the following changes to your existing installation of HA:
  2. Edit `configuration.yaml` as below.  I recommend 300 seconds, and `high_precision: true` (both are defaults). YMMV with heuristics/schedules.
  3. To keep your component up to date, there are two options: a) manually (e.g. via `git pull`), or b) using the custom component updater (https://github.com/custom-components/custom_updater), which is preferred.
  
-### Post-Installation checklist
+#### Post-Installation checklist
 
 TBD
 
-## Troubleshooting
+#### Troubleshooting
 
 Execute this command: `cat home-assistant.log | grep WARNING | grep evohome`, and you should expect to see the following warning, `You are using a custom component for evohome_cc`:
 ```
@@ -51,7 +51,7 @@ Regardless of that you can also try the following:
   `cat home-assistant.log | grep evohome | grep WARN`, and/or
   `cat home-assistant.log | grep evohome | grep Found`
 
-## Configuration file
+### Configuration file
 
 The `configuration.yaml` is as below (NB: it is `evohome_cc:` rather than `evohome:`)
 
@@ -84,7 +84,7 @@ logger:
 #   evohomeclient2: warn
 ```
 
-### Notes about `scan_interval` and `high_precision`
+#### Notes about `scan_interval` and `high_precision`
 
 The `scan_interval` parameter defaults to 300 secs, but could be as low as 120 secs.  This _should be_ OK as this component polls Honeywell servers with only 1 API call per scan interval, with a maximum 30 per hour (plus a few more once hourly for authentication/authorization).
 
@@ -92,7 +92,7 @@ However, Note that `high_precision` temps use 3 API calls per scan interval for 
 
 I understand that up to 250 polls per hour is considered OK, but YMMV (if anyone has any official info on this, I'd like to know).
 
-## List of future features
+### List of Possible Future Changes (WIP)
 
 Replace AutoWithEco: mode that allows a delta of +/-0.5, +/-1.0, +/-1.5, etc.
 
