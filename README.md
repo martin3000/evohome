@@ -1,14 +1,14 @@
 > ### Warning
 >
 > This custom component has been re-written for HA's new scheme/structure for custom components from version 0.88/0.89 onwards - it will likely not work with old versions of HA.
-
-|**Old Folder Structure**|**New Folder Structure**
-|---|---
-```custom_components/evohome_cc.py```|```custom_components/evohome_cc/__init__.py```
-```custom_components/climate/evohome_cc.py```|```custom_components/evohome_cc/climate.py```
-```custom_components/water_heater/evohome_cc.py```|```custom_components/evohome_cc/water_heater.py```
-
-Notice also that the `logger:` and `custom_updater:` sections of your `configuration.yaml` may need updating. 
+> 
+> |**Old Folder Structure**|**New Folder Structure**
+> |---|---
+> ```custom_components/evohome_cc.py```|```custom_components/evohome_cc/__init__.py```
+> ```custom_components/climate/evohome_cc.py```|```custom_components/evohome_cc/climate.py```
+> ```custom_components/water_heater/evohome_cc.py```|```custom_components/evohome_cc/water_heater.py```
+> 
+> Notice also that the `logger:` and `custom_updater:` sections of your `configuration.yaml` may need updating. 
 
 ## HA Custom Component for Honeywell evohome
 
