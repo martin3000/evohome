@@ -373,7 +373,7 @@ class EvoZone(EvoChildDevice, ClimateDevice):
                 )
 # until either the next scheduled setpoint, or just an hour from now
                 if self._params[CONF_USE_SCHEDULES]:
-                    until = self._next_switchpoint_time
+                    until = self._next_switchpoint_time()
                 else:
                     until = datetime.now() + timedelta(hours=1)
 
