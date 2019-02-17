@@ -1,20 +1,20 @@
 {
     "evohome_cc": {
-        "version":         "0.9.5",
+        "version":         "0.9.6",
         "local_location":  "custom_components/evohome_cc.py",
         "remote_location": "https://raw.githubusercontent.com/zxdavb/evohome/master/evohome_cc.py",
         "changelog":       "https://raw.githubusercontent.com/zxdavb/evohome/master/CHANGELOG.md",
         "visit_repo":      "https://github.com/zxdavb/evohome"
     },
     "climate.evohome_cc": {
-        "version":         "0.9.5",
+        "version":         "0.9.6",
         "local_location":  "custom_components/climate/evohome_cc.py",
         "remote_location": "https://raw.githubusercontent.com/zxdavb/evohome/master/climate/evohome_cc.py",
         "changelog":       "https://raw.githubusercontent.com/zxdavb/evohome/master/CHANGELOG.md",
         "visit_repo":      "https://github.com/zxdavb/evohome"
     },
     "water_heater.evohome_cc": {
-        "version":         "0.9.5",
+        "version":         "0.9.6",
         "local_location":  "custom_components/water_heater/evohome_cc.py",
         "remote_location": "https://raw.githubusercontent.com/zxdavb/evohome/master/water_heater/evohome_cc.py",
         "changelog":       "https://raw.githubusercontent.com/zxdavb/evohome/master/CHANGELOG.md",

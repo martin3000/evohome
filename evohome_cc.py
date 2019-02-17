@@ -8,7 +8,7 @@ https://github.com/zxdavb/evohome/
 """
 # pylint: disable=deprecated-method; ZXDEL
 
-__version__ = '0.9.5'
+__version__ = '0.9.6'
 
 # Glossary:
 #   TCS - temperature control system (a.k.a. Controller, Parent), which can
